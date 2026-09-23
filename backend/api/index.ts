@@ -1,0 +1,69 @@
+import 'reflect-metadata';
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import helmet from 'helmet';
+import compression from 'compression';
+import { AppModule } from '../dist/app.module';
+import { HttpExceptionFilter } from '../dist/common/filters/http-exception.filter';
+import { LoggingInterceptor } from '../dist/common/interceptors/logging.interceptor';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express, { Express, Request, Response } from 'express';
+
+let cachedServer: Express;
+
+async function bootstrapServer(): Promise<Express> {
+  const server = express();
+  const adapter = new ExpressAdapter(server);
+  const app = await NestFactory.create(AppModule, adapter, {
+    logger: ['log', 'warn', 'error'],
+  });
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    }),
+  );
+  app.use(compression());
+
+  app.enableCors({
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Tenant-ID',
+      'Cache-Control',
+      'Pragma',
+      'Accept',
+      'Origin',
+    ],
+  });
+
+  app.setGlobalPrefix('api/v1');
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: false,
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  );
+
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor());
+
+  await app.init();
+  return server;
+}
+
+export default async function handler(req: Request, res: Response) {
+  if (!cachedServer) {
+    cachedServer = await bootstrapServer();
+  }
+  return cachedServer(req, res);
+}

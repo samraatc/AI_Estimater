@@ -33,8 +33,8 @@ import { SearchModule }        from './modules/search/search.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [appConfig, databaseConfig, aiConfig, storageConfig], envFilePath: ['.env.local','.env'] }),
     MongooseModule.forRootAsync({ inject: [ConfigService], useFactory: (c: ConfigService) => ({ uri: c.get('database.uri') }) }),
-    CacheModule.registerAsync({ isGlobal: true, inject: [ConfigService], useFactory: (c: ConfigService) => ({ store: redisStore as any, host: c.get('app.redisHost'), port: c.get('app.redisPort'), password: c.get('app.redisPassword') || undefined, ttl: 300 }) }),
-    BullModule.forRootAsync({ inject: [ConfigService], useFactory: (c: ConfigService) => ({ redis: { host: c.get('app.redisHost'), port: c.get('app.redisPort'), password: c.get('app.redisPassword') || undefined } }) }),
+    CacheModule.registerAsync({ isGlobal: true, inject: [ConfigService], useFactory: (c: ConfigService) => ({ store: redisStore as any, host: c.get('app.redisHost'), port: c.get('app.redisPort'), password: c.get('app.redisPassword') || undefined, tls: c.get('app.redisTls') ? {} : undefined, ttl: 300 }) }),
+    BullModule.forRootAsync({ inject: [ConfigService], useFactory: (c: ConfigService) => ({ redis: { host: c.get('app.redisHost'), port: c.get('app.redisPort'), password: c.get('app.redisPassword') || undefined, tls: c.get('app.redisTls') ? {} : undefined } }) }),
     ThrottlerModule.forRoot([{ name:'short', ttl:1000, limit:20 }, { name:'medium', ttl:10000, limit:100 }, { name:'long', ttl:60000, limit:300 }]),
     EventEmitterModule.forRoot({ wildcard: true }),
     HealthModule, StorageModule, AuthModule, TenantsModule, UsersModule, ClientsModule,

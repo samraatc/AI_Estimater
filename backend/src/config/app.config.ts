@@ -9,6 +9,7 @@ export default registerAs('app', () => ({
   redisHost:        process.env.REDIS_HOST        || 'localhost',
   redisPort:        parseInt(process.env.REDIS_PORT, 10) || 6379,
   redisPassword:    process.env.REDIS_PASSWORD    || '',
+  redisTls:         process.env.REDIS_TLS === 'true',
   maxFileSizeMb:    parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 100,
   frontendUrl:      process.env.FRONTEND_URL      || 'http://localhost:3001',
 }));

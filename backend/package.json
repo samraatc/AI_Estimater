@@ -2,6 +2,7 @@
   "name": "estimateos-api",
   "version": "1.0.0",
   "scripts": {
+    "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
@@ -46,7 +47,7 @@
     "ioredis": "^5.3.2",
     "mammoth": "^1.6.0",
     "minio": "^7.1.1",
-    "mongoose": "^9.10.2",
+    "mongoose": "^8.24.4",
     "nodemailer": "^6.9.4",
     "openai": "^4.20.0",
     "passport": "^0.6.0",
