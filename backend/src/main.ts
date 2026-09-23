@@ -69,6 +69,22 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
+  // ---------------- Root & Health Shortcut ----------------
+  const expressApp = app.getHttpAdapter().getInstance();
+  if (expressApp && typeof expressApp.get === 'function') {
+    expressApp.get('/', (_req: any, res: any) => {
+      res.json({
+        name: 'EstimateOS API',
+        status: 'ok',
+        health: '/api/v1/health',
+        timestamp: new Date().toISOString(),
+      });
+    });
+    expressApp.get('/health', (_req: any, res: any) => {
+      res.redirect(301, '/api/v1/health');
+    });
+  }
+
   // ---------------- Swagger (Dev Only) ----------------
   if (env !== 'production') {
     const docConfig = new DocumentBuilder()

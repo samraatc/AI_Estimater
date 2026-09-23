@@ -57,6 +57,20 @@ async function bootstrapServer(): Promise<Express> {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
+  // Root welcome & /health shortcut
+  server.get('/', (_req, res) => {
+    res.json({
+      name: 'EstimateOS API',
+      status: 'ok',
+      health: '/api/v1/health',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  server.get('/health', (_req, res) => {
+    res.redirect(301, '/api/v1/health');
+  });
+
   await app.init();
   return server;
 }
