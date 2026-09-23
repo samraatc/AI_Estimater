@@ -7,6 +7,8 @@ import { AppModule } from '../dist/app.module';
 import { HttpExceptionFilter } from '../dist/common/filters/http-exception.filter';
 import { LoggingInterceptor } from '../dist/common/interceptors/logging.interceptor';
 import { ExpressAdapter } from '@nestjs/platform-express';
+import { getConnectionToken } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 import express, { Express, Request, Response } from 'express';
 
 let cachedServer: Express;
@@ -72,6 +74,19 @@ async function bootstrapServer(): Promise<Express> {
   });
 
   await app.init();
+
+  try {
+    const conn = app.get<Connection>(getConnectionToken());
+    if (conn && conn.readyState !== 1) {
+      await Promise.race([
+        conn.asPromise(),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ]);
+    }
+  } catch (err) {
+    console.warn('MongoDB connection warm-up:', err);
+  }
+
   return server;
 }
 
