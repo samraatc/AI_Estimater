@@ -19,7 +19,7 @@ export function useAuth() {
 
   const logout = useCallback(async () => {
     const rt = localStorage.getItem('refresh_token') || '';
-    try { const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'; const token = localStorage.getItem('access_token'); await fetch(`${BASE}/auth/logout`, { method:'POST', headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}, body: JSON.stringify({ refreshToken: rt }) }); } catch {}
+    try { const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'; const token = localStorage.getItem('access_token'); await fetch(`${BASE}/auth/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ refreshToken: rt }) }); } catch { }
     localStorage.clear();
     setUser(null);
     window.location.href = '/login';
@@ -37,7 +37,7 @@ export function useAuth() {
       if (!token) return;
       const r = await fetch(`${BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
       if (r.ok) { const d = await r.json(); localStorage.setItem('user', JSON.stringify(d)); setUser(d); }
-    } catch {}
+    } catch { }
   }, []);
 
   return { user, loading, logout, hasPermission, refreshProfile };

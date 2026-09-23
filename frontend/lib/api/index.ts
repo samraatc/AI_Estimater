@@ -46,7 +46,7 @@ async function tryRefresh(): Promise<boolean> {
     }
     const d = await r.json();
     if (d.accessToken && d.refreshToken) {
-      localStorage.setItem('access_token',  d.accessToken);
+      localStorage.setItem('access_token', d.accessToken);
       localStorage.setItem('refresh_token', d.refreshToken);
       resolveRefreshQueue(true);
       return true;
@@ -91,7 +91,7 @@ async function req<T>(
     // not a background refetch (to avoid redirect loops)
     if (typeof window !== 'undefined') {
       const isBackground = document.visibilityState === 'hidden' ||
-                           document.hidden;
+        document.hidden;
       if (!isBackground) {
         localStorage.clear();
         window.location.href = '/login';
@@ -131,7 +131,7 @@ async function upload(
       if (e.lengthComputable && onProgress)
         onProgress(Math.round(e.loaded / e.total * 100));
     };
-    xhr.onload  = () => { try { resolve(JSON.parse(xhr.responseText)); } catch { resolve({}); } };
+    xhr.onload = () => { try { resolve(JSON.parse(xhr.responseText)); } catch { resolve({}); } };
     xhr.onerror = () => reject(new Error('Upload failed'));
     xhr.send(formData);
   });
@@ -147,39 +147,39 @@ const qs = (p: Record<string, any>) => {
 
 // ── HTTP verbs ────────────────────────────────────────────────
 export const http = {
-  get:    <T = any>(path: string)             => req<T>('GET',    path),
-  post:   <T = any>(path: string, body?: any) => req<T>('POST',   path, body),
-  patch:  <T = any>(path: string, body?: any) => req<T>('PATCH',  path, body),
-  put:    <T = any>(path: string, body?: any) => req<T>('PUT',    path, body),
-  delete: <T = any>(path: string)             => req<T>('DELETE', path),
+  get: <T = any>(path: string) => req<T>('GET', path),
+  post: <T = any>(path: string, body?: any) => req<T>('POST', path, body),
+  patch: <T = any>(path: string, body?: any) => req<T>('PATCH', path, body),
+  put: <T = any>(path: string, body?: any) => req<T>('PUT', path, body),
+  delete: <T = any>(path: string) => req<T>('DELETE', path),
 };
 
 // ── Auth ──────────────────────────────────────────────────────
 export const authApi = {
-  login:     (email: string, password: string) => req<any>('POST', '/auth/login', { email, password }),
-  refresh:   (refreshToken: string)            => req<any>('POST', '/auth/refresh', { refreshToken }),
-  logout:    (refreshToken: string)            => req<void>('POST', '/auth/logout', { refreshToken }),
-  me:        ()                                => req<any>('GET',  '/auth/me'),
+  login: (email: string, password: string) => req<any>('POST', '/auth/login', { email, password }),
+  refresh: (refreshToken: string) => req<any>('POST', '/auth/refresh', { refreshToken }),
+  logout: (refreshToken: string) => req<void>('POST', '/auth/logout', { refreshToken }),
+  me: () => req<any>('GET', '/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     req<void>('PATCH', '/auth/password', { currentPassword, newPassword }),
 };
 
 // ── Projects ──────────────────────────────────────────────────
 export const projectsApi = {
-  list:   (params: any = {}) => req<any>('GET', `/projects${qs(params)}`),
-  getOne: (id: string)       => req<any>('GET', `/projects/${id}`),
-  create: (data: any)        => req<any>('POST', '/projects', data),
+  list: (params: any = {}) => req<any>('GET', `/projects${qs(params)}`),
+  getOne: (id: string) => req<any>('GET', `/projects/${id}`),
+  create: (data: any) => req<any>('POST', '/projects', data),
   update: (id: string, d: any) => req<any>('PATCH', `/projects/${id}`, d),
-  delete: (id: string)       => req<void>('DELETE', `/projects/${id}`),
-  clone:  (id: string)       => req<any>('POST', `/projects/${id}/clone`),
-  stats:  ()                 => req<any>('GET', '/projects/stats'),
+  delete: (id: string) => req<void>('DELETE', `/projects/${id}`),
+  clone: (id: string) => req<any>('POST', `/projects/${id}/clone`),
+  stats: () => req<any>('GET', '/projects/stats'),
 };
 
 // ── Files ─────────────────────────────────────────────────────
 export const filesApi = {
-  list:        (projectId: string)  => req<any[]>('GET', `/files?projectId=${projectId}`),
-  delete:      (id: string)         => req<void>('DELETE', `/files/${id}`),
-  getDownload: (id: string)         => req<any>('GET', `/files/${id}/download`),
+  list: (projectId: string) => req<any[]>('GET', `/files?projectId=${projectId}`),
+  delete: (id: string) => req<void>('DELETE', `/files/${id}`),
+  getDownload: (id: string) => req<any>('GET', `/files/${id}/download`),
   upload: (projectId: string, files: File[], onProgress?: (p: number) => void) => {
     const fd = new FormData();
     files.forEach(f => fd.append('files', f));
@@ -189,25 +189,25 @@ export const filesApi = {
 
 // ── Estimations ───────────────────────────────────────────────
 export const estimationsApi = {
-  list:       (projectId: string) => req<any[]>('GET', `/estimations?projectId=${projectId}`),
-  listAll:    (params: any = {})  => req<any>('GET', `/estimations/all${qs(params)}`),
-  getOne:     (id: string)        => req<any>('GET', `/estimations/${id}`),
-  create:     (data: any)         => req<any>('POST', '/estimations', data),
-  update:     (id: string, d: any) => req<any>('PATCH', `/estimations/${id}`, d),
+  list: (projectId: string) => req<any[]>('GET', `/estimations?projectId=${projectId}`),
+  listAll: (params: any = {}) => req<any>('GET', `/estimations/all${qs(params)}`),
+  getOne: (id: string) => req<any>('GET', `/estimations/${id}`),
+  create: (data: any) => req<any>('POST', '/estimations', data),
+  update: (id: string, d: any) => req<any>('PATCH', `/estimations/${id}`, d),
   upsertItem: (estimationId: string, item: any) =>
     req<any>('POST', `/estimations/${estimationId}/items`, item),
   deleteItem: (estimationId: string, itemId: string) =>
     req<void>('DELETE', `/estimations/${estimationId}/items/${itemId}`),
   bulkUpdate: (estimationId: string, items: any[]) =>
     req<any>('POST', `/estimations/${estimationId}/items/bulk`, { items }),
-  version:    (id: string) => req<any>('POST', `/estimations/${id}/version`),
-  lock:       (id: string) => req<any>('POST', `/estimations/${id}/lock`),
-  unlock:     (id: string) => req<any>('POST', `/estimations/${id}/unlock`),
-  analyze:    (projectId: string) =>
+  version: (id: string) => req<any>('POST', `/estimations/${id}/version`),
+  lock: (id: string) => req<any>('POST', `/estimations/${id}/lock`),
+  unlock: (id: string) => req<any>('POST', `/estimations/${id}/unlock`),
+  analyze: (projectId: string) =>
     req<any>('POST', `/estimations/project/${projectId}/analyze`),
-  status:     (projectId: string) =>
+  status: (projectId: string) =>
     req<any>('GET', `/estimations/project/${projectId}/status`),
-  chat:       (estimationId: string, message: string, history: any[]) =>
+  chat: (estimationId: string, message: string, history: any[]) =>
     req<any>('POST', `/estimations/${estimationId}/chat`, { message, history }),
   pdf: async (estimationId: string): Promise<Blob> => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : '';
@@ -223,13 +223,13 @@ export const estimationsApi = {
 
 // ── Quotations ────────────────────────────────────────────────
 export const quotationsApi = {
-  list:    (projectId: string) => req<any[]>('GET', `/quotations?projectId=${projectId}`),
-  listAll: ()                  => req<any[]>('GET', '/quotations/all'),
-  getOne:  (id: string)        => req<any>('GET', `/quotations/${id}`),
-  create:  (data: any)         => req<any>('POST', '/quotations', data),
-  update:  (id: string, d: any) => req<any>('PATCH', `/quotations/${id}`, d),
-  delete:  (id: string)        => req<void>('DELETE', `/quotations/${id}`),
-  send:    (id: string, d: any) => req<void>('POST', `/quotations/${id}/send`, d),
+  list: (projectId: string) => req<any[]>('GET', `/quotations?projectId=${projectId}`),
+  listAll: () => req<any[]>('GET', '/quotations/all'),
+  getOne: (id: string) => req<any>('GET', `/quotations/${id}`),
+  create: (data: any) => req<any>('POST', '/quotations', data),
+  update: (id: string, d: any) => req<any>('PATCH', `/quotations/${id}`, d),
+  delete: (id: string) => req<void>('DELETE', `/quotations/${id}`),
+  send: (id: string, d: any) => req<void>('POST', `/quotations/${id}/send`, d),
   pdf: async (id: string): Promise<Blob> => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : '';
     const r = await fetch(`${BASE}/quotations/${id}/pdf`, {
@@ -242,50 +242,50 @@ export const quotationsApi = {
 
 // ── Analytics ─────────────────────────────────────────────────
 export const analyticsApi = {
-  dashboard:  () => req<any>('GET', '/analytics/dashboard'),
+  dashboard: () => req<any>('GET', '/analytics/dashboard'),
   aiAccuracy: () => req<any>('GET', '/analytics/ai-accuracy'),
-  project:    (id: string) => req<any>('GET', `/analytics/projects/${id}`),
+  project: (id: string) => req<any>('GET', `/analytics/projects/${id}`),
 };
 
 // ── Pricing ───────────────────────────────────────────────────
 export const pricingApi = {
-  list:       (params: any = {}) => req<any[]>('GET', `/pricing${qs(params)}`),
-  create:     (data: any)        => req<any>('POST', '/pricing', data),
-  update:     (id: string, d: any) => req<any>('PATCH', `/pricing/${id}`, d),
-  delete:     (id: string)       => req<void>('DELETE', `/pricing/${id}`),
-  categories: ()                 => req<string[]>('GET', '/pricing/categories'),
-  bulkImport: (items: any[])     => req<any>('POST', '/pricing/bulk', { items }),
+  list: (params: any = {}) => req<any[]>('GET', `/pricing${qs(params)}`),
+  create: (data: any) => req<any>('POST', '/pricing', data),
+  update: (id: string, d: any) => req<any>('PATCH', `/pricing/${id}`, d),
+  delete: (id: string) => req<void>('DELETE', `/pricing/${id}`),
+  categories: () => req<string[]>('GET', '/pricing/categories'),
+  bulkImport: (items: any[]) => req<any>('POST', '/pricing/bulk', { items }),
 };
 
 // ── Users ─────────────────────────────────────────────────────
 export const usersApi = {
-  list:         () => req<any[]>('GET', '/users'),
-  stats:        () => req<any>('GET', '/users/stats'),
-  roles:        () => req<any[]>('GET', '/users/roles'),
-  invite:       (email: string, roleId: string) =>
+  list: () => req<any[]>('GET', '/users'),
+  stats: () => req<any>('GET', '/users/stats'),
+  roles: () => req<any[]>('GET', '/users/roles'),
+  invite: (email: string, roleId: string) =>
     req<any>('POST', '/users/invite', { email, roleId }),
-  update:       (id: string, d: any) => req<any>('PATCH', `/users/${id}`, d),
-  deactivate:   (id: string)         => req<void>('DELETE', `/users/${id}`),
-  reactivate:   (id: string)         => req<any>('POST', `/users/${id}/reactivate`),
+  update: (id: string, d: any) => req<any>('PATCH', `/users/${id}`, d),
+  deactivate: (id: string) => req<void>('DELETE', `/users/${id}`),
+  reactivate: (id: string) => req<any>('POST', `/users/${id}/reactivate`),
   acceptInvite: (token: string, password: string, firstName: string, lastName: string) =>
     req<any>('POST', '/users/accept-invite', { token, password, firstName, lastName }),
 };
 
 // ── Clients ───────────────────────────────────────────────────
 export const clientsApi = {
-  list:   (params: any = {}) => req<any>('GET', `/clients${qs(params)}`),
-  create: (data: any)        => req<any>('POST', '/clients', data),
+  list: (params: any = {}) => req<any>('GET', `/clients${qs(params)}`),
+  create: (data: any) => req<any>('POST', '/clients', data),
   update: (id: string, d: any) => req<any>('PATCH', `/clients/${id}`, d),
 };
 
 // ── Approvals ─────────────────────────────────────────────────
 export const approvalsApi = {
-  submit:  (estimationId: string, approverIds: string[]) =>
+  submit: (estimationId: string, approverIds: string[]) =>
     req<any>('POST', '/approvals/submit', { estimationId, approverIds }),
-  decide:  (wfId: string, decision: string, comments?: string) =>
+  decide: (wfId: string, decision: string, comments?: string) =>
     req<any>('POST', `/approvals/${wfId}/decide`, { decision, comments }),
-  byEst:   (estimationId: string) => req<any>('GET', `/approvals/estimation/${estimationId}`),
-  pending: ()                     => req<any[]>('GET', '/approvals/my/pending'),
+  byEst: (estimationId: string) => req<any>('GET', `/approvals/estimation/${estimationId}`),
+  pending: () => req<any[]>('GET', '/approvals/my/pending'),
 };
 
 // ── Search ────────────────────────────────────────────────────
@@ -295,7 +295,7 @@ export const searchApi = {
 
 // ── Tenants ───────────────────────────────────────────────────
 export const tenantsApi = {
-  getOne: (id: string)       => req<any>('GET', `/tenants/${id}`),
+  getOne: (id: string) => req<any>('GET', `/tenants/${id}`),
   update: (id: string, d: any) => req<any>('PATCH', `/tenants/${id}`, d),
-  usage:  (id: string)       => req<any>('GET', `/tenants/${id}/usage`),
+  usage: (id: string) => req<any>('GET', `/tenants/${id}/usage`),
 };

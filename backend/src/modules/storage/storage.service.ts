@@ -91,10 +91,42 @@ export class StorageService implements OnModuleInit {
     }
 
     if (this.useCloudinary) {
-      const url = cloudinary.url(key, { secure: true, resource_type: 'auto' });
-      const res = await fetch(url);
-      const arrayBuffer = await res.arrayBuffer();
-      return Buffer.from(arrayBuffer);
+      // 1. Try signed private download URL (needed for PDFs and restricted delivery assets)
+      try {
+        const cleanPublicId = key.startsWith('estimateos/')
+          ? key
+          : 'estimateos/' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const ext = key.includes('.') ? key.split('.').pop() || 'pdf' : 'pdf';
+
+        const downloadUrl = (cloudinary.utils as any).private_download_url(cleanPublicId, ext, {
+          resource_type: ext === 'pdf' ? 'image' : 'auto',
+          type: 'upload',
+        });
+
+        const res = await fetch(downloadUrl);
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          if (arrayBuffer.byteLength > 0) {
+            return Buffer.from(arrayBuffer);
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Cloudinary private download attempt failed: ${err.message}`);
+      }
+
+      // 2. Fallback to standard delivery URL
+      try {
+        const url = cloudinary.url(key, { secure: true, resource_type: 'auto' });
+        const res = await fetch(url);
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          return Buffer.from(arrayBuffer);
+        }
+      } catch (err: any) {
+        this.logger.warn(`Cloudinary standard download failed: ${err.message}`);
+      }
+
+      return Buffer.from('');
     }
 
     if (!this.minioClient) {
@@ -115,7 +147,18 @@ export class StorageService implements OnModuleInit {
       return key;
     }
     if (this.useCloudinary) {
-      return cloudinary.url(key, { secure: true, resource_type: 'auto' });
+      try {
+        const cleanPublicId = key.startsWith('estimateos/')
+          ? key
+          : 'estimateos/' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const ext = key.includes('.') ? key.split('.').pop() || 'pdf' : 'pdf';
+        return (cloudinary.utils as any).private_download_url(cleanPublicId, ext, {
+          resource_type: ext === 'pdf' ? 'image' : 'auto',
+          type: 'upload',
+        });
+      } catch {
+        return cloudinary.url(key, { secure: true, resource_type: 'auto' });
+      }
     }
     if (this.minioClient) {
       return this.minioClient.presignedGetObject(bucket, key, expiry);
