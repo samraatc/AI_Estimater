@@ -1,7 +1,16 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { NotificationsService } from './notifications.service';
-import { User } from '../users/entities/user.entity';
+import { User, UserSchema } from '../users/entities/user.entity';
 
-@Module({ imports: [TypeOrmModule.forFeature([User])], providers: [NotificationsService], exports: [NotificationsService] })
+@Module({
+  imports: [
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+    ]),
+  ],
+  providers: [NotificationsService],
+  exports: [NotificationsService],
+})
 export class NotificationsModule {}
+

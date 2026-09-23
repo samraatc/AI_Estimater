@@ -1,18 +1,42 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Project, ProjectDocument } from '../projects/entities/project.entity';
+import { Estimation, EstimationDocument } from '../estimations/entities/estimation.entity';
+import { Client, ClientDocument } from '../clients/entities/client.entity';
 
 @Injectable()
 export class SearchService {
-  constructor(private ds: DataSource) {}
+  constructor(
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(Estimation.name) private estimationModel: Model<EstimationDocument>,
+    @InjectModel(Client.name) private clientModel: Model<ClientDocument>,
+  ) {}
+
   async globalSearch(query: string, tenantId: string, limit = 20) {
     if (!query?.trim()) return { query, results: [], total: 0 };
-    const q = `%${query.replace(/[%_]/g,'')}%`;
+    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
     const [projects, estimations, clients] = await Promise.all([
-      this.ds.query(`SELECT id,'project' AS type, name AS title, status AS subtitle FROM projects WHERE tenant_id=$1 AND name ILIKE $2 AND deleted_at IS NULL LIMIT $3`, [tenantId, q, limit]),
-      this.ds.query(`SELECT id,'estimation' AS type, title, status AS subtitle FROM estimations WHERE tenant_id=$1 AND title ILIKE $2 LIMIT $3`, [tenantId, q, limit]),
-      this.ds.query(`SELECT id,'client' AS type, name AS title, email AS subtitle FROM clients WHERE tenant_id=$1 AND (name ILIKE $2 OR email ILIKE $2) LIMIT $3`, [tenantId, q, limit]),
+      this.projectModel
+        .find({ tenantId, name: regex, deletedAt: null })
+        .limit(limit)
+        .lean(),
+      this.estimationModel
+        .find({ tenantId, title: regex })
+        .limit(limit)
+        .lean(),
+      this.clientModel
+        .find({ tenantId, $or: [{ name: regex }, { email: regex }] })
+        .limit(limit)
+        .lean(),
     ]);
-    const results = [...projects, ...estimations, ...clients].slice(0, limit);
+
+    const formattedProjects = projects.map(p => ({ id: p.id, type: 'project', title: p.name, subtitle: p.status }));
+    const formattedEstimations = estimations.map(e => ({ id: e.id, type: 'estimation', title: e.title, subtitle: e.status }));
+    const formattedClients = clients.map(c => ({ id: c.id, type: 'client', title: c.name, subtitle: c.email }));
+
+    const results = [...formattedProjects, ...formattedEstimations, ...formattedClients].slice(0, limit);
     return { query, results, total: results.length };
   }
 }

@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectModel } from '@nestjs/mongoose';
 import { InjectQueue } from '@nestjs/bull';
-import { Repository } from 'typeorm';
+import { Model } from 'mongoose';
 import { Queue } from 'bull';
-import { ProjectFile } from './entities/project-file.entity';
-import { Project } from '../projects/entities/project.entity';
+import { ProjectFile, ProjectFileDocument } from './entities/project-file.entity';
+import { Project, ProjectDocument } from '../projects/entities/project.entity';
 import { StorageService } from '../storage/storage.service';
 import { DocumentAgentService } from '../ai/agents/document-agent.service';
 
@@ -15,14 +15,14 @@ export class FilesService {
   private readonly logger = new Logger(FilesService.name);
 
   constructor(
-    @InjectRepository(ProjectFile) private fileRepo:    Repository<ProjectFile>,
-    @InjectRepository(Project)     private projectRepo: Repository<Project>,
+    @InjectModel(ProjectFile.name) private fileModel:    Model<ProjectFileDocument>,
+    @InjectModel(Project.name)     private projectModel: Model<ProjectDocument>,
     @InjectQueue('ai-document-processing') private docQueue: Queue,
     private storage: StorageService,
   ) {}
 
   async uploadFiles(projectId: string, tenantId: string, userId: string, files: any[]): Promise<ProjectFile[]> {
-    const project = await this.projectRepo.findOne({ where: { id: projectId, tenantId } });
+    const project = await this.projectModel.findOne({ id: projectId, tenantId });
     if (!project) throw new NotFoundException('Project not found');
     const saved: ProjectFile[] = [];
     for (const file of files) {
@@ -31,18 +31,20 @@ export class FilesService {
       const fileType = DocumentAgentService.detectFileType(file.mimetype, file.originalname);
       const storageKey = this.storage.buildFileKey(tenantId, projectId, file.originalname);
       await this.storage.uploadBuffer(storageKey, file.buffer, file.mimetype);
-      const record = await this.fileRepo.save(this.fileRepo.create({ projectId, tenantId, uploadedBy: userId, originalName: file.originalname, storageKey, mimeType: file.mimetype, sizeBytes: file.size, fileType, ocrStatus: 'pending', parseStatus: 'pending' }));
-      saved.push(record);
+      const record = await this.fileModel.create({ projectId, tenantId, uploadedBy: userId, originalName: file.originalname, storageKey, mimeType: file.mimetype, sizeBytes: file.size, fileType, ocrStatus: 'pending', parseStatus: 'pending' });
+      saved.push(record.toObject());
       await this.docQueue.add('process-file', { fileId: record.id, projectId, tenantId }, { attempts: 3, backoff: { type: 'exponential', delay: 3000 } });
       this.logger.log(`Uploaded: ${file.originalname}`);
     }
     return saved;
   }
 
-  async findByProject(projectId: string, tenantId: string) { return this.fileRepo.find({ where: { projectId, tenantId }, order: { createdAt: 'DESC' } }); }
+  async findByProject(projectId: string, tenantId: string) {
+    return this.fileModel.find({ projectId, tenantId }).sort({ createdAt: -1 }).lean();
+  }
 
   async findOne(id: string, tenantId: string) {
-    const f = await this.fileRepo.findOne({ where: { id, tenantId } });
+    const f = await this.fileModel.findOne({ id, tenantId }).lean();
     if (!f) throw new NotFoundException('File not found');
     return f;
   }
@@ -55,6 +57,7 @@ export class FilesService {
   async delete(id: string, tenantId: string): Promise<void> {
     const f = await this.findOne(id, tenantId);
     await this.storage.deleteFile(f.storageKey);
-    await this.fileRepo.remove(f);
+    await this.fileModel.deleteOne({ id, tenantId });
   }
 }
+

@@ -1,17 +1,23 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { ApprovalWorkflow } from './approval-workflow.entity';
-import { User } from '../../users/entities/user.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-@Entity('approval_steps')
+export type ApprovalStepDocument = ApprovalStep & Document;
+
+@Schema({ timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'approval_steps' })
 export class ApprovalStep {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ name: 'workflow_id' }) workflowId: string;
-  @ManyToOne(() => ApprovalWorkflow, (w: ApprovalWorkflow) => w.steps, { onDelete: 'CASCADE' }) @JoinColumn({ name: 'workflow_id' }) workflow: ApprovalWorkflow;
-  @Column({ name: 'approver_id' }) approverId: string;
-  @ManyToOne(() => User) @JoinColumn({ name: 'approver_id' }) approver: User;
-  @Column({ name: 'step_number' }) stepNumber: number;
-  @Column({ default: 'pending' }) status: string;
-  @Column({ nullable: true, type: 'text' }) comments: string;
-  @Column({ name: 'decided_at', nullable: true }) decidedAt: Date;
-  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
+  @Prop({ default: uuidv4, index: true }) id: string;
+  @Prop({ required: true, index: true }) workflowId: string;
+  @Prop({ required: true, index: true }) approverId: string;
+  @Prop({ required: true }) stepNumber: number;
+  @Prop({ default: 'pending' }) status: string;
+  @Prop() comments: string;
+  @Prop({ type: Date }) decidedAt: Date;
+  createdAt: Date;
+
+  approver?: any;
+  workflow?: any;
 }
+
+export const ApprovalStepSchema = SchemaFactory.createForClass(ApprovalStep);
+

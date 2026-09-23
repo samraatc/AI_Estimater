@@ -1,91 +1,107 @@
 import { OpenAI } from 'openai';
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { Estimation } from './entities/estimation.entity';
-import { EstimationItem } from './entities/estimation-item.entity';
-import { AuditLog } from '../../common/entities/audit-log.entity';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Estimation, EstimationDocument } from './entities/estimation.entity';
+import { EstimationItem, EstimationItemDocument } from './entities/estimation-item.entity';
+import { AuditLog, AuditLogDocument } from '../../common/entities/audit-log.entity';
 
 @Injectable()
 export class EstimationsService {
   private readonly logger = new Logger(EstimationsService.name);
   constructor(
-    @InjectRepository(Estimation)     private estRepo:   Repository<Estimation>,
-    @InjectRepository(EstimationItem) private itemRepo:  Repository<EstimationItem>,
-    @InjectRepository(AuditLog)       private auditRepo: Repository<AuditLog>,
-    private ds: DataSource,
+    @InjectModel(Estimation.name)     private estModel:   Model<EstimationDocument>,
+    @InjectModel(EstimationItem.name) private itemModel:  Model<EstimationItemDocument>,
+    @InjectModel(AuditLog.name)       private auditModel: Model<AuditLogDocument>,
   ) {}
 
   async findByProject(projectId: string, tenantId: string) {
-    return this.estRepo.find({ where: { projectId, tenantId }, order: { versionNumber: 'DESC' }, select: ['id','title','versionNumber','status','finalTotal','currency','aiConfidence','isLocked','createdAt','updatedAt'] });
+    return this.estModel.find({ projectId, tenantId })
+      .sort({ versionNumber: -1 })
+      .select('id title versionNumber status finalTotal currency aiConfidence isLocked createdAt updatedAt')
+      .lean();
   }
 
   async findAll(tenantId: string, query: any = {}) {
     const { status, page = 1, limit = 50 } = query;
-    const where: any = { tenantId };
-    if (status) where.status = status;
-    const [data, total] = await this.estRepo.findAndCount({ where, order: { updatedAt: 'DESC' }, skip: (page-1)*limit, take: limit });
-    return { data, total, page, pages: Math.ceil(total/limit) };
+    const filter: any = { tenantId };
+    if (status) filter.status = status;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [data, total] = await Promise.all([
+      this.estModel.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      this.estModel.countDocuments(filter),
+    ]);
+
+    return { data, total, page: Number(page), pages: Math.ceil(total / Number(limit)) };
   }
 
   async findOne(id: string, tenantId: string) {
-    const e = await this.estRepo.findOne({ where: { id, tenantId }, relations: ['items'] });
+    const e = await this.estModel.findOne({ id, tenantId }).lean();
     if (!e) throw new NotFoundException('Estimation not found');
-    e.items?.sort((a,b) => a.category.localeCompare(b.category) || a.sortOrder - b.sortOrder);
+    const items = await this.itemModel.find({ estimationId: id, tenantId }).lean();
+    items.sort((a, b) => a.category.localeCompare(b.category) || (a.sortOrder || 0) - (b.sortOrder || 0));
+    e.items = items;
     return e;
   }
 
   async create(dto: any, tenantId: string, userId: string) {
-    const latest = await this.estRepo.findOne({ where: { projectId: dto.projectId, tenantId }, order: { versionNumber: 'DESC' } });
+    const latest = await this.estModel.findOne({ projectId: dto.projectId, tenantId }).sort({ versionNumber: -1 }).lean();
     const vn = (latest?.versionNumber || 0) + 1;
-    const saved = await this.estRepo.save(this.estRepo.create({ ...dto, tenantId, createdBy: userId, versionNumber: vn, title: dto.title || `Estimation v${vn}` })) as unknown as Estimation;
-    await this.audit(tenantId, userId, 'estimation.created', saved.id);
-    return saved;
+    const created = await this.estModel.create({ ...dto, tenantId, createdBy: userId, versionNumber: vn, title: dto.title || `Estimation v${vn}` });
+    await this.audit(tenantId, userId, 'estimation.created', created.id);
+    return created.toObject();
   }
 
   async update(id: string, dto: any, tenantId: string, userId: string) {
     const e = await this.findOne(id, tenantId);
-    this.assertUnlocked(e);
-    await this.estRepo.update({ id, tenantId }, dto);
+    this.assertUnlocked(e as any);
+    await this.estModel.updateOne({ id, tenantId }, { $set: dto });
     if (dto.overheadPct !== undefined || dto.taxPct !== undefined || dto.profitMarginPct !== undefined) await this.recalcFromItems(id, tenantId);
     return this.findOne(id, tenantId);
   }
 
   async upsertItem(estimationId: string, dto: any, tenantId: string, userId: string) {
     const e = await this.findOne(estimationId, tenantId);
-    this.assertUnlocked(e);
-    let item: EstimationItem;
+    this.assertUnlocked(e as any);
+    let item: any;
     if (dto.id) {
-      item = await this.itemRepo.findOne({ where: { id: dto.id, estimationId, tenantId } });
+      item = await this.itemModel.findOne({ id: dto.id, estimationId, tenantId }).lean();
       if (!item) throw new NotFoundException('Item not found');
       Object.assign(item, dto);
+      item.totalAmount = Number(item.quantity || 0) * Number(item.unitRate || 0) * (1 - Number(item.discountPct || 0) / 100);
+      await this.itemModel.updateOne({ id: dto.id, estimationId }, { $set: item });
     } else {
-      const maxOrder = await this.itemRepo.maximum('sortOrder', { estimationId }) || 0;
-      item = this.itemRepo.create({ ...dto, estimationId, tenantId, sortOrder: maxOrder+1, source: 'manual' }) as unknown as EstimationItem;
+      const topItems = await this.itemModel.find({ estimationId }).sort({ sortOrder: -1 }).limit(1).lean();
+      const maxOrder = topItems[0]?.sortOrder || 0;
+      const totalAmount = Number(dto.quantity || 0) * Number(dto.unitRate || 0) * (1 - Number(dto.discountPct || 0) / 100);
+      const created = await this.itemModel.create({ ...dto, estimationId, tenantId, sortOrder: maxOrder + 1, source: 'manual', totalAmount });
+      item = created.toObject();
     }
-    item.totalAmount = Number(item.quantity||0) * Number(item.unitRate||0) * (1 - Number(item.discountPct||0)/100);
-    const saved = await this.itemRepo.save(item) as EstimationItem;
     await this.recalcFromItems(estimationId, tenantId);
-    return saved;
+    return item;
   }
 
   async deleteItem(estimationId: string, itemId: string, tenantId: string) {
     const e = await this.findOne(estimationId, tenantId);
-    this.assertUnlocked(e);
-    const item = await this.itemRepo.findOne({ where: { id: itemId, estimationId } });
+    this.assertUnlocked(e as any);
+    const item = await this.itemModel.findOne({ id: itemId, estimationId });
     if (!item) throw new NotFoundException('Item not found');
-    await this.itemRepo.remove(item);
+    await this.itemModel.deleteOne({ id: itemId, estimationId });
     await this.recalcFromItems(estimationId, tenantId);
   }
 
   async bulkUpdateItems(estimationId: string, items: any[], tenantId: string) {
     const e = await this.findOne(estimationId, tenantId);
-    this.assertUnlocked(e);
+    this.assertUnlocked(e as any);
     for (const item of items) {
-      const totalAmount = Number(item.quantity||0) * Number(item.unitRate||0) * (1 - Number(item.discountPct||0)/100);
-      if (item.id) await this.itemRepo.update({ id: item.id, estimationId }, { ...item, totalAmount });
-      else await this.itemRepo.save(this.itemRepo.create({ ...item, estimationId, tenantId, totalAmount, source: 'manual' }));
+      const totalAmount = Number(item.quantity || 0) * Number(item.unitRate || 0) * (1 - Number(item.discountPct || 0) / 100);
+      if (item.id) {
+        await this.itemModel.updateOne({ id: item.id, estimationId }, { $set: { ...item, totalAmount } });
+      } else {
+        await this.itemModel.create({ ...item, estimationId, tenantId, totalAmount, source: 'manual' });
+      }
     }
     await this.recalcFromItems(estimationId, tenantId);
     return this.findOne(estimationId, tenantId);
@@ -93,47 +109,78 @@ export class EstimationsService {
 
   async createVersion(id: string, tenantId: string, userId: string) {
     const src = await this.findOne(id, tenantId);
-    const newVersion = await this.estRepo.save(this.estRepo.create({ ...src, id: undefined, versionNumber: src.versionNumber+1, title: `${src.title.replace(/ v\d+$/,'')} v${src.versionNumber+1}`, status: 'draft', isLocked: false, lockedAt: null, lockedBy: null, parentId: src.id, createdBy: userId, createdAt: undefined, updatedAt: undefined }));
-    const items = src.items.map(i => this.itemRepo.create({ ...i, id: undefined, estimationId: newVersion.id, createdAt: undefined, updatedAt: undefined }));
-    await this.itemRepo.save(items);
+    const { _id, id: _srcId, createdAt, updatedAt, items, ...srcRest } = src as any;
+    const newVersion = await this.estModel.create({
+      ...srcRest,
+      versionNumber: src.versionNumber + 1,
+      title: `${src.title.replace(/ v\d+$/, '')} v${src.versionNumber + 1}`,
+      status: 'draft',
+      isLocked: false,
+      lockedAt: null,
+      lockedBy: null,
+      parentId: src.id,
+      createdBy: userId,
+    });
+
+    const newItems = (items || []).map((i: any) => {
+      const { _id: _itemId, id: _oldId, createdAt: _c, updatedAt: _u, ...iRest } = i;
+      return { ...iRest, estimationId: newVersion.id, tenantId };
+    });
+    if (newItems.length > 0) {
+      await this.itemModel.insertMany(newItems);
+    }
     await this.audit(tenantId, userId, 'estimation.version.created', newVersion.id);
-    return newVersion;
+    return newVersion.toObject();
   }
 
   async lock(id: string, tenantId: string, userId: string) {
     const e = await this.findOne(id, tenantId);
     if (e.isLocked) throw new BadRequestException('Already locked');
-    await this.estRepo.update({ id, tenantId }, { isLocked: true, lockedAt: new Date(), lockedBy: userId, status: 'approved' });
+    await this.estModel.updateOne({ id, tenantId }, { $set: { isLocked: true, lockedAt: new Date(), lockedBy: userId, status: 'approved' } });
     return { message: 'Estimation locked' };
   }
 
   async unlock(id: string, tenantId: string) {
-    await this.estRepo.update({ id, tenantId }, { isLocked: false, lockedAt: null, lockedBy: null, status: 'draft' });
+    await this.estModel.updateOne({ id, tenantId }, { $set: { isLocked: false, lockedAt: null, lockedBy: null, status: 'draft' } });
     return { message: 'Estimation unlocked' };
   }
 
   async compare(id1: string, id2: string, tenantId: string) {
     const [v1, v2] = await Promise.all([this.findOne(id1, tenantId), this.findOne(id2, tenantId)]);
-    const m1 = new Map(v1.items.map(i => [i.description, i]));
-    const m2 = new Map(v2.items.map(i => [i.description, i]));
-    return { version1: { id: v1.id, title: v1.title, total: v1.finalTotal }, version2: { id: v2.id, title: v2.title, total: v2.finalTotal }, totalDiff: Number(v2.finalTotal) - Number(v1.finalTotal), changes: { added: v2.items.filter(i => !m1.has(i.description)), removed: v1.items.filter(i => !m2.has(i.description)), changed: v2.items.filter(i => { const o = m1.get(i.description) as any; return o && (o.quantity !== i.quantity || o.unitRate !== i.unitRate); }) } };
+    const m1 = new Map((v1.items || []).map(i => [i.description, i]));
+    const m2 = new Map((v2.items || []).map(i => [i.description, i]));
+    return {
+      version1: { id: v1.id, title: v1.title, total: v1.finalTotal },
+      version2: { id: v2.id, title: v2.title, total: v2.finalTotal },
+      totalDiff: Number(v2.finalTotal) - Number(v1.finalTotal),
+      changes: {
+        added: (v2.items || []).filter(i => !m1.has(i.description)),
+        removed: (v1.items || []).filter(i => !m2.has(i.description)),
+        changed: (v2.items || []).filter(i => {
+          const o = m1.get(i.description) as any;
+          return o && (o.quantity !== i.quantity || o.unitRate !== i.unitRate);
+        }),
+      },
+    };
   }
 
   private async recalcFromItems(estimationId: string, tenantId: string) {
-    const e = await this.estRepo.findOne({ where: { id: estimationId, tenantId } });
-    const items = await this.itemRepo.find({ where: { estimationId } });
-    const sum = (cats: string[]) => items.filter(i => cats.includes(i.category)).reduce((s,i) => s + Number(i.totalAmount), 0);
+    const e = await this.estModel.findOne({ id: estimationId, tenantId }).lean();
+    if (!e) return;
+    const items = await this.itemModel.find({ estimationId }).lean();
+    const sum = (cats: string[]) => items.filter(i => cats.includes(i.category)).reduce((s, i) => s + Number(i.totalAmount), 0);
     const matC = sum(['material']); const steelC = sum(['steel']); const labC = sum(['labor']); const eqC = sum(['equipment']); const trC = sum(['transport']);
     const base = matC + steelC + labC + eqC + trC;
-    const ovhPct = Number(e.overheadPct)||8; const taxPct = Number(e.taxPct)||5; const profPct = Number(e.profitMarginPct)||15;
-    const ovh = base * ovhPct/100; const sub = base + ovh; const tax = sub * taxPct/100; const prof = sub * profPct/100;
-    await this.estRepo.update(estimationId, { materialCost:matC, steelCost:steelC, laborCost:labC, equipmentCost:eqC, transportCost:trC, overheadCost:ovh, subtotal:sub, taxAmount:tax, profitAmount:prof, finalTotal:sub+tax+prof });
+    const ovhPct = Number(e.overheadPct) || 8; const taxPct = Number(e.taxPct) || 5; const profPct = Number(e.profitMarginPct) || 15;
+    const ovh = base * ovhPct / 100; const sub = base + ovh; const tax = sub * taxPct / 100; const prof = sub * profPct / 100;
+    await this.estModel.updateOne({ id: estimationId }, { $set: { materialCost: matC, steelCost: steelC, laborCost: labC, equipmentCost: eqC, transportCost: trC, overheadCost: ovh, subtotal: sub, taxAmount: tax, profitAmount: prof, finalTotal: sub + tax + prof } });
   }
 
   private assertUnlocked(e: Estimation) { if (e.isLocked) throw new ForbiddenException('Estimation is locked. Create a new version.'); }
   private async audit(tenantId: string, userId: string, action: string, entityId: string) {
-    await this.auditRepo.save(this.auditRepo.create({ tenantId, userId, action, entityType: 'estimation', entityId }));
+    await this.auditModel.create({ tenantId, userId, action, entityType: 'estimation', entityId });
   }
+
   async chatWithEstimation(
     estimationId: string,
     message: string,

@@ -1,27 +1,35 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Tenant } from '../../tenants/entities/tenant.entity';
-import { Role } from './role.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-@Entity('users')
+export type UserDocument = User & Document;
+
+@Schema({ timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' }, collection: 'users' })
 export class User {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ name: 'tenant_id' }) tenantId: string;
-  @ManyToOne(() => Tenant) @JoinColumn({ name: 'tenant_id' }) tenant: Tenant;
-  @Column({ name: 'role_id' }) roleId: string;
-  @ManyToOne(() => Role) @JoinColumn({ name: 'role_id' }) role: Role;
-  @Column() email: string;
-  @Column({ name: 'password_hash' }) passwordHash: string;
-  @Column({ name: 'first_name', nullable: true }) firstName: string;
-  @Column({ name: 'last_name', nullable: true }) lastName: string;
-  @Column({ name: 'avatar_url', nullable: true }) avatarUrl: string;
-  @Column({ nullable: true }) department: string;
-  @Column({ default: 'active' }) status: string;
-  @Column({ name: 'last_login_at', nullable: true }) lastLoginAt: Date;
-  @Column({ name: 'mfa_enabled', default: false }) mfaEnabled: boolean;
-  @Column({ name: 'mfa_secret', nullable: true }) mfaSecret: string;
-  @Column({ name: 'invite_token', nullable: true }) inviteToken: string;
-  @Column({ name: 'invite_expires', nullable: true }) inviteExpires: Date;
-  @Column({ type: 'jsonb', default: '{}' }) settings: Record<string, any>;
-  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
-  @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;
+  @Prop({ default: uuidv4, index: true }) id: string;
+  @Prop({ required: true, index: true }) tenantId: string;
+  @Prop({ required: true, index: true }) roleId: string;
+  @Prop({ required: true, index: true }) email: string;
+  @Prop({ default: '' }) passwordHash: string;
+  @Prop() firstName: string;
+  @Prop() lastName: string;
+  @Prop() avatarUrl: string;
+  @Prop() department: string;
+  @Prop({ default: 'active' }) status: string;
+  @Prop({ type: Date }) lastLoginAt: Date;
+  @Prop({ default: false }) mfaEnabled: boolean;
+  @Prop() mfaSecret: string;
+  @Prop() inviteToken: string;
+  @Prop({ type: Date }) inviteExpires: Date;
+  @Prop({ type: Object, default: {} }) settings: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+
+  // Virtual for joined relations compatibility
+  role?: any;
+  tenant?: any;
 }
+
+export const UserSchema = SchemaFactory.createForClass(User);
+UserSchema.index({ tenantId: 1, email: 1 }, { unique: true });
+

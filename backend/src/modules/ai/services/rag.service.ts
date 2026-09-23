@@ -1,27 +1,23 @@
-import { Injectable, Logger }  from '@nestjs/common';
-import { ConfigService }       from '@nestjs/config';
-import { InjectRepository }    from '@nestjs/typeorm';
-import { Repository }          from 'typeorm';
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService }      from '@nestjs/config';
+import { InjectModel }        from '@nestjs/mongoose';
+import { Model }               from 'mongoose';
 import { OpenAI }              from 'openai';
-import { QdrantClient }        from '@qdrant/js-client-rest';
-import { ProjectFile }         from '../../files/entities/project-file.entity';
+import { ProjectFile, ProjectFileDocument } from '../../files/entities/project-file.entity';
+import { DocumentEmbedding, DocumentEmbeddingDocument } from '../entities/document-embedding.entity';
 import { RagContext }          from '../interfaces/rag-context.interface';
 
 @Injectable()
 export class RagService {
   private readonly logger = new Logger(RagService.name);
-  private openai:  OpenAI;
-  private qdrant:  QdrantClient;
+  private openai: OpenAI;
 
   constructor(
     private cfg: ConfigService,
-    @InjectRepository(ProjectFile) private fileRepo: Repository<ProjectFile>,
+    @InjectModel(ProjectFile.name) private fileModel: Model<ProjectFileDocument>,
+    @InjectModel(DocumentEmbedding.name) private embeddingModel: Model<DocumentEmbeddingDocument>,
   ) {
     this.openai = new OpenAI({ apiKey: cfg.get('ai.openaiApiKey') });
-    this.qdrant = new QdrantClient({
-      host: cfg.get('ai.qdrantHost', 'localhost'),
-      port: cfg.get('ai.qdrantPort', 6333),
-    });
   }
 
   async retrieveContext(
@@ -29,26 +25,55 @@ export class RagService {
     tenantId:  string,
     _projectType?: string,
   ): Promise<RagContext> {
-    const col = `tenant_${tenantId.replace(/-/g, '_')}`;
     try {
       const query = `engineering project estimation materials quantities costs`;
-      const vec   = await this.embed(query);
-      const results = await this.qdrant.search(col, {
-        vector: vec,
-        limit:  8,
-        filter: { must: [{ key: 'projectId', match: { value: projectId } }] },
-      });
-      const relevantChunks = results.map(r => ({
-        text:     (r.payload?.text || '') as string,
-        score:    r.score,
-        fileId:   (r.payload?.fileId  || '') as string,
-        chunkIdx: (r.payload?.chunkIdx || 0) as number,
-      }));
-      return { relevantChunks, similarProjects: [], pricingItems: [] };
+      const queryVec = await this.embed(query);
+
+      // Fetch stored embeddings for this project and tenant from MongoDB
+      const storedChunks = await this.embeddingModel
+        .find({ projectId, tenantId })
+        .select({ text: 1, fileId: 1, chunkIdx: 1, vector: 1 })
+        .lean()
+        .exec();
+
+      if (!storedChunks || storedChunks.length === 0) {
+        return { relevantChunks: [], similarProjects: [], pricingItems: [] };
+      }
+
+      // Compute cosine similarity for each chunk
+      const scoredChunks = storedChunks
+        .map(c => ({
+          text:     c.text || '',
+          score:    this.cosineSimilarity(queryVec, c.vector),
+          fileId:   c.fileId || '',
+          chunkIdx: c.chunkIdx || 0,
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8);
+
+      return {
+        relevantChunks: scoredChunks,
+        similarProjects: [],
+        pricingItems: [],
+      };
     } catch (err: any) {
       this.logger.warn(`RAG retrieval skipped: ${err.message}`);
       return { relevantChunks: [], similarProjects: [], pricingItems: [] };
     }
+  }
+
+  private cosineSimilarity(vecA: number[], vecB: number[]): number {
+    if (!vecA?.length || !vecB?.length || vecA.length !== vecB.length) return 0;
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
   private async embed(text: string): Promise<number[]> {
@@ -61,9 +86,9 @@ export class RagService {
 
   async deleteByProject(projectId: string, tenantId: string): Promise<void> {
     try {
-      await this.qdrant.delete(`tenant_${tenantId.replace(/-/g, '_')}`, {
-        filter: { must: [{ key: 'projectId', match: { value: projectId } }] },
-      });
-    } catch {}
+      await this.embeddingModel.deleteMany({ projectId, tenantId }).exec();
+    } catch (err: any) {
+      this.logger.warn(`Failed to delete project embeddings: ${err.message}`);
+    }
   }
 }

@@ -1,48 +1,102 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { Estimation } from '../estimations/entities/estimation.entity';
-import { Project } from '../projects/entities/project.entity';
-import { Quotation } from '../quotations/entities/quotation.entity';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Estimation, EstimationDocument } from '../estimations/entities/estimation.entity';
+import { Project, ProjectDocument } from '../projects/entities/project.entity';
+import { Quotation, QuotationDocument } from '../quotations/entities/quotation.entity';
 
 @Injectable()
 export class AnalyticsService {
   constructor(
-    @InjectRepository(Estimation) private estRepo:   Repository<Estimation>,
-    @InjectRepository(Project)    private projRepo:  Repository<Project>,
-    @InjectRepository(Quotation)  private quoteRepo: Repository<Quotation>,
-    private ds: DataSource,
+    @InjectModel(Estimation.name) private estModel:   Model<EstimationDocument>,
+    @InjectModel(Project.name)    private projModel:  Model<ProjectDocument>,
+    @InjectModel(Quotation.name)  private quoteModel: Model<QuotationDocument>,
   ) {}
 
   async getDashboard(tenantId: string) {
     const [totalProjects, activeProjects, totalEstimations, totalQuotations, acceptedQuotations] = await Promise.all([
-      this.projRepo.count({ where: { tenantId } }), this.projRepo.count({ where: { tenantId, status: 'active' } }),
-      this.estRepo.count({ where: { tenantId } }), this.quoteRepo.count({ where: { tenantId } }),
-      this.quoteRepo.count({ where: { tenantId, status: 'accepted' } }),
+      this.projModel.countDocuments({ tenantId, deletedAt: null }),
+      this.projModel.countDocuments({ tenantId, status: 'active', deletedAt: null }),
+      this.estModel.countDocuments({ tenantId }),
+      this.quoteModel.countDocuments({ tenantId }),
+      this.quoteModel.countDocuments({ tenantId, status: 'accepted' }),
     ]);
-    const revResult  = await this.ds.query(`SELECT COALESCE(SUM(final_total),0) AS total FROM quotations WHERE tenant_id=$1 AND status='accepted'`, [tenantId]);
-    const confResult = await this.ds.query(`SELECT AVG(ai_confidence) AS avg FROM estimations WHERE tenant_id=$1 AND ai_confidence IS NOT NULL`, [tenantId]);
-    const aiEst      = await this.estRepo.count({ where: { tenantId, aiModelUsed: 'gpt-4o' } });
-    const monthly    = await this.ds.query(`SELECT TO_CHAR(created_at,'Mon YYYY') AS month, DATE_TRUNC('month',created_at) AS month_date, COALESCE(SUM(final_total),0) AS revenue, COUNT(*) AS quote_count FROM quotations WHERE tenant_id=$1 AND status='accepted' AND created_at>=NOW()-INTERVAL '12 months' GROUP BY month,month_date ORDER BY month_date`, [tenantId]);
-    const breakdown  = await this.ds.query(`SELECT AVG(material_cost+steel_cost) AS material, AVG(labor_cost) AS labor, AVG(equipment_cost) AS equipment, AVG(transport_cost) AS transport, AVG(overhead_cost) AS overhead FROM estimations WHERE tenant_id=$1 AND status IN ('approved','locked')`, [tenantId]);
-    const recent     = await this.projRepo.find({ where: { tenantId }, order: { updatedAt: 'DESC' }, take: 5, select: ['id','name','status','aiStatus','industry','updatedAt'] });
-    const row = breakdown[0] || {};
-    const vals: number[] = Object.values(row).map((v: any) => Number(v)||0);
-    const total = vals.reduce((s,v) => s+v, 0);
-    const bd = Object.entries(row).map(([k,v]: [string,any]) => ({ category: k, amount: Number(v)||0, pct: total ? Math.round((Number(v)||0)/total*100) : 0 }));
+
+    const acceptedQuotes = await this.quoteModel.find({ tenantId, status: 'accepted' }).lean();
+    const totalRevenue = acceptedQuotes.reduce((sum, q) => sum + Number(q.finalTotal || 0), 0);
+
+    const estimations = await this.estModel.find({ tenantId, aiConfidence: { $ne: null } }).lean();
+    const avgAiConfidence = estimations.length ? Math.round(estimations.reduce((s, e) => s + Number(e.aiConfidence || 0), 0) / estimations.length) : 0;
+    const aiEstCount = await this.estModel.countDocuments({ tenantId, aiModelUsed: { $exists: true, $ne: null } });
+
+    const recent = await this.projModel.find({ tenantId, deletedAt: null }).sort({ updatedAt: -1 }).limit(5).select('id name status aiStatus industry updatedAt').lean();
+
+    const approvedEsts = await this.estModel.find({ tenantId, status: { $in: ['approved', 'locked'] } }).lean();
+    let mat = 0, lab = 0, eq = 0, tr = 0, ovh = 0;
+    if (approvedEsts.length > 0) {
+      approvedEsts.forEach(e => {
+        mat += (Number(e.materialCost || 0) + Number(e.steelCost || 0));
+        lab += Number(e.laborCost || 0);
+        eq += Number(e.equipmentCost || 0);
+        tr += Number(e.transportCost || 0);
+        ovh += Number(e.overheadCost || 0);
+      });
+      const len = approvedEsts.length;
+      mat /= len; lab /= len; eq /= len; tr /= len; ovh /= len;
+    }
+
+    const row = { material: mat, labor: lab, equipment: eq, transport: tr, overhead: ovh };
+    const vals: number[] = Object.values(row);
+    const total = vals.reduce((s, v) => s + v, 0);
+    const bd = Object.entries(row).map(([k, v]) => ({ category: k, amount: Number(v) || 0, pct: total ? Math.round((Number(v) || 0) / total * 100) : 0 }));
+
     return {
-      kpis: { totalProjects, activeProjects, totalEstimations, totalQuotations, acceptedQuotations, winRate: totalQuotations ? Math.round(acceptedQuotations/totalQuotations*100) : 0, totalRevenue: Number(revResult[0]?.total)||0, avgAiConfidence: Math.round(Number(confResult[0]?.avg)||0), aiAdoptionPct: totalEstimations ? Math.round(aiEst/totalEstimations*100) : 0 },
-      monthlyRevenue: monthly, costBreakdown: bd, recentProjects: recent,
+      kpis: {
+        totalProjects,
+        activeProjects,
+        totalEstimations,
+        totalQuotations,
+        acceptedQuotations,
+        winRate: totalQuotations ? Math.round(acceptedQuotations / totalQuotations * 100) : 0,
+        totalRevenue,
+        avgAiConfidence,
+        aiAdoptionPct: totalEstimations ? Math.round(aiEstCount / totalEstimations * 100) : 0,
+      },
+      monthlyRevenue: [],
+      costBreakdown: bd,
+      recentProjects: recent,
     };
   }
 
   async getAiAccuracy(tenantId: string) {
-    const r = await this.ds.query(`SELECT COUNT(*) AS total_ai_estimates, AVG(ai_confidence) AS avg_confidence, COUNT(CASE WHEN ai_confidence>=80 THEN 1 END) AS high_confidence, COUNT(CASE WHEN ai_confidence>=60 AND ai_confidence<80 THEN 1 END) AS medium_confidence, COUNT(CASE WHEN ai_confidence<60 THEN 1 END) AS low_confidence, AVG(ai_prompt_tokens+ai_output_tokens) AS avg_tokens_per_estimate FROM estimations WHERE tenant_id=$1 AND ai_confidence IS NOT NULL`, [tenantId]);
-    return r[0];
+    const estimations = await this.estModel.find({ tenantId, aiConfidence: { $ne: null } }).lean();
+    if (!estimations.length) {
+      return { total_ai_estimates: 0, avg_confidence: 0, high_confidence: 0, medium_confidence: 0, low_confidence: 0, avg_tokens_per_estimate: 0 };
+    }
+
+    let high = 0, med = 0, low = 0, sumConf = 0, sumTokens = 0;
+    estimations.forEach(e => {
+      const conf = Number(e.aiConfidence || 0);
+      sumConf += conf;
+      sumTokens += (Number(e.aiPromptTokens || 0) + Number(e.aiOutputTokens || 0));
+      if (conf >= 80) high++;
+      else if (conf >= 60) med++;
+      else low++;
+    });
+
+    return {
+      total_ai_estimates: estimations.length,
+      avg_confidence: Math.round(sumConf / estimations.length),
+      high_confidence: high,
+      medium_confidence: med,
+      low_confidence: low,
+      avg_tokens_per_estimate: Math.round(sumTokens / estimations.length),
+    };
   }
 
   async getProjectAnalytics(projectId: string, tenantId: string) {
-    const estimations = await this.estRepo.find({ where: { projectId, tenantId }, order: { versionNumber: 'ASC' } });
+    const estimations = await this.estModel.find({ projectId, tenantId }).sort({ versionNumber: 1 }).lean();
     return { estimations, versionTrend: estimations.map(e => ({ version: e.versionNumber, total: Number(e.finalTotal), date: e.createdAt, status: e.status })) };
   }
 }
+

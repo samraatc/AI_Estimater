@@ -14,24 +14,21 @@
 
 services:
 
-  # ── PostgreSQL ────────────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: estimateos-postgres
+  # ── MongoDB ───────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: estimateos-mongo
     restart: always
-    environment:
-      POSTGRES_DB:       estimateos
-      POSTGRES_USER:     estimateos
-      POSTGRES_PASSWORD: "CHANGE_DB_PASSWORD"
+    ports:
+      - "27017:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+      - mongo_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U estimateos -d estimateos"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout:  5s
       retries:  5
-      start_period: 30s
+      start_period: 15s
     networks: [estimateos-net]
 
   # ── Redis ─────────────────────────────────────────────────────
@@ -60,16 +57,6 @@ services:
       start_period: 15s
     networks: [estimateos-net]
 
-  # ── Qdrant ────────────────────────────────────────────────────
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: estimateos-qdrant
-    restart: always
-    volumes:
-      - qdrant_data:/qdrant/storage
-    environment:
-      QDRANT__TELEMETRY_DISABLED: "true"
-    networks: [estimateos-net]
 
   # ── MinIO ─────────────────────────────────────────────────────
   minio:
@@ -120,26 +107,20 @@ services:
       - ./backend/.env.production
     environment:
       # Override with Docker service hostnames
-      DB_HOST:        postgres
-      DB_PASSWORD:    "CHANGE_DB_PASSWORD"
-      DB_USERNAME:    estimateos
-      DB_NAME:        estimateos
+      MONGODB_URI:    "mongodb://mongodb:27017/estimateos"
       REDIS_HOST:     redis
       REDIS_PASSWORD: "CHANGE_REDIS_PASSWORD"
-      QDRANT_HOST:    qdrant
       MINIO_ENDPOINT: minio
       MINIO_ACCESS_KEY: "CHANGE_MINIO_KEY"
       MINIO_SECRET_KEY: "CHANGE_MINIO_SECRET"
       NODE_ENV:       production
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio:
         condition: service_healthy
-      qdrant:
-        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/v1/health || exit 1"]
       interval: 30s
@@ -158,13 +139,9 @@ services:
     env_file:
       - ./backend/.env.production
     environment:
-      DB_HOST:          postgres
-      DB_PASSWORD:      "CHANGE_DB_PASSWORD"
-      DB_USERNAME:      estimateos
-      DB_NAME:          estimateos
+      MONGODB_URI:      "mongodb://mongodb:27017/estimateos"
       REDIS_HOST:       redis
       REDIS_PASSWORD:   "CHANGE_REDIS_PASSWORD"
-      QDRANT_HOST:      qdrant
       MINIO_ENDPOINT:   minio
       MINIO_ACCESS_KEY: "CHANGE_MINIO_KEY"
       MINIO_SECRET_KEY: "CHANGE_MINIO_SECRET"
@@ -172,7 +149,7 @@ services:
       WORKER_MODE:      "true"
       WORKER_CONCURRENCY: "3"
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -215,9 +192,8 @@ services:
     networks: [estimateos-net]
 
 volumes:
-  postgres_data:
+  mongo_data:
   redis_data:
-  qdrant_data:
   minio_data:
 
 networks:

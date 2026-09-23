@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import { OpenAI } from 'openai';
 import * as nodemailer from 'nodemailer';
-import { Quotation } from './entities/quotation.entity';
-import { Estimation } from '../estimations/entities/estimation.entity';
-import { Project } from '../projects/entities/project.entity';
+import { Quotation, QuotationDocument } from './entities/quotation.entity';
+import { Estimation, EstimationDocument } from '../estimations/entities/estimation.entity';
+import { Project, ProjectDocument } from '../projects/entities/project.entity';
 import { StorageService } from '../storage/storage.service';
 import { PromptEngineService } from '../ai/services/prompt-engine.service';
 
@@ -26,9 +26,9 @@ export class QuotationsService {
   private mailer: nodemailer.Transporter;
 
   constructor(
-    @InjectRepository(Quotation)  private quoteRepo: Repository<Quotation>,
-    @InjectRepository(Estimation) private estRepo:   Repository<Estimation>,
-    @InjectRepository(Project)    private projRepo:  Repository<Project>,
+    @InjectModel(Quotation.name)  private quoteModel: Model<QuotationDocument>,
+    @InjectModel(Estimation.name) private estModel:   Model<EstimationDocument>,
+    @InjectModel(Project.name)    private projModel:  Model<ProjectDocument>,
     private cfg: ConfigService, private storage: StorageService, private prompts: PromptEngineService,
   ) {
     this.openai = new OpenAI({ apiKey: cfg.get('ai.openaiApiKey') });
@@ -37,19 +37,31 @@ export class QuotationsService {
   }
 
   async generate(dto: any, tenantId: string, userId: string): Promise<Quotation> {
-    const est  = await this.estRepo.findOne({ where: { id: dto.estimationId, tenantId }, relations: ['items'] });
+    const est  = await this.estModel.findOne({ id: dto.estimationId, tenantId }).lean();
     if (!est) throw new NotFoundException('Estimation not found');
-    const proj = await this.projRepo.findOne({ where: { id: est.projectId, tenantId } });
+    const proj = await this.projModel.findOne({ id: est.projectId, tenantId }).lean();
+    if (!proj) throw new NotFoundException('Project not found');
+
     const quoteNumber = await this.nextQuoteNumber(tenantId);
     const aiContent   = await this.aiDraft(proj, est, tenantId);
     const validUntil  = new Date(); validUntil.setDate(validUntil.getDate() + (dto.validityDays||30));
-    return this.quoteRepo.save(this.quoteRepo.create({ estimationId: est.id, projectId: proj.id, tenantId, createdBy: userId, quoteNumber, title: dto.title || `Quotation — ${proj.name}`, status: 'draft', scopeSummary: aiContent.scope_summary, termsConditions: aiContent.terms_conditions, validityDays: dto.validityDays||30, validUntil, subtotal: est.subtotal, taxAmount: est.taxAmount, finalTotal: est.finalTotal, currency: est.currency, aiGenerated: true, metadata: { deliverables: aiContent.deliverables, exclusions: aiContent.exclusions, paymentTerms: aiContent.payment_terms, executiveSummary: aiContent.executive_summary } }));
+
+    const created = await this.quoteModel.create({
+      estimationId: est.id, projectId: proj.id, tenantId, createdBy: userId,
+      quoteNumber, title: dto.title || `Quotation — ${proj.name}`, status: 'draft',
+      scopeSummary: aiContent.scope_summary, termsConditions: aiContent.terms_conditions,
+      validityDays: dto.validityDays||30, validUntil, subtotal: est.subtotal, taxAmount: est.taxAmount,
+      finalTotal: est.finalTotal, currency: est.currency, aiGenerated: true,
+      metadata: { deliverables: aiContent.deliverables, exclusions: aiContent.exclusions, paymentTerms: aiContent.payment_terms, executiveSummary: aiContent.executive_summary }
+    });
+
+    return created.toObject();
   }
 
   async generatePdf(id: string, tenantId: string): Promise<Buffer> {
     const q   = await this.findOne(id, tenantId);
-    const est = await this.estRepo.findOne({ where: { id: q.estimationId }, relations: ['items'] });
-    const proj = await this.projRepo.findOne({ where: { id: q.projectId } });
+    const est = await this.estModel.findOne({ id: q.estimationId }).lean();
+    const proj = await this.projModel.findOne({ id: q.projectId }).lean();
     const html = this.renderHtml(q, est, proj);
     try {
       const puppeteer = require('puppeteer');
@@ -60,7 +72,7 @@ export class QuotationsService {
       await browser.close();
       const key = this.storage.buildQuotationKey(tenantId, id);
       await this.storage.uploadBuffer(key, Buffer.from(pdf), 'application/pdf');
-      await this.quoteRepo.update(id, { pdfStorageKey: key });
+      await this.quoteModel.updateOne({ id, tenantId }, { $set: { pdfStorageKey: key } });
       return Buffer.from(pdf);
     } catch (err: any) { this.logger.error(`PDF generation failed: ${err.message}`); throw new BadRequestException('PDF generation failed. Ensure puppeteer/chromium is installed.'); }
   }
@@ -68,30 +80,57 @@ export class QuotationsService {
   async sendByEmail(id: string, dto: any, tenantId: string): Promise<void> {
     if (!this.mailer) throw new BadRequestException('Email not configured');
     const q    = await this.findOne(id, tenantId);
-    const proj = await this.projRepo.findOne({ where: { id: q.projectId } });
+    const proj = await this.projModel.findOne({ id: q.projectId }).lean();
     const pdf  = await this.generatePdf(id, tenantId);
-    await this.mailer.sendMail({ from: this.cfg.get('storage.emailFrom'), to: dto.recipientEmail, subject: dto.subject || `Quotation ${q.quoteNumber} — ${proj.name}`, html: `<p>Please find attached our quotation ${q.quoteNumber}.</p><p><strong>${q.currency} ${Number(q.finalTotal).toLocaleString()}</strong></p>`, attachments: [{ filename: `${q.quoteNumber}.pdf`, content: pdf, contentType: 'application/pdf' }] });
-    await this.quoteRepo.update(id, { status: 'sent', sentAt: new Date(), sentToEmail: dto.recipientEmail });
+    await this.mailer.sendMail({ from: this.cfg.get('storage.emailFrom'), to: dto.recipientEmail, subject: dto.subject || `Quotation ${q.quoteNumber} — ${proj?.name || ''}`, html: `<p>Please find attached our quotation ${q.quoteNumber}.</p><p><strong>${q.currency} ${Number(q.finalTotal).toLocaleString()}</strong></p>`, attachments: [{ filename: `${q.quoteNumber}.pdf`, content: pdf, contentType: 'application/pdf' }] });
+    await this.quoteModel.updateOne({ id, tenantId }, { $set: { status: 'sent', sentAt: new Date(), sentToEmail: dto.recipientEmail } });
   }
 
-  async findAll(tenantId: string) { return this.quoteRepo.find({ where: { tenantId }, relations: ['project', 'estimation'], order: { createdAt: 'DESC' }, take: 200 }); }
-  async findByProject(projectId: string, tenantId: string) { return this.quoteRepo.find({ where: { projectId, tenantId }, order: { createdAt: 'DESC' } }); }
+  async findAll(tenantId: string) {
+    const quotes = await this.quoteModel.find({ tenantId }).sort({ createdAt: -1 }).limit(200).lean();
+    const projIds = quotes.map(q => q.projectId).filter(Boolean);
+    const estIds = quotes.map(q => q.estimationId).filter(Boolean);
+
+    const [projs, ests] = await Promise.all([
+      this.projModel.find({ id: { $in: projIds } }).lean(),
+      this.estModel.find({ id: { $in: estIds } }).lean(),
+    ]);
+
+    const projMap = new Map(projs.map(p => [p.id, p]));
+    const estMap = new Map(ests.map(e => [e.id, e]));
+
+    return quotes.map(q => {
+      q.project = projMap.get(q.projectId);
+      q.estimation = estMap.get(q.estimationId);
+      return q;
+    });
+  }
+
+  async findByProject(projectId: string, tenantId: string) {
+    return this.quoteModel.find({ projectId, tenantId }).sort({ createdAt: -1 }).lean();
+  }
 
   async findOne(id: string, tenantId: string): Promise<Quotation> {
-    const q = await this.quoteRepo.findOne({ where: { id, tenantId }, relations: ['project', 'estimation'] });
+    const q = await this.quoteModel.findOne({ id, tenantId }).lean();
     if (!q) throw new NotFoundException('Quotation not found');
-    return q;
+    const [proj, est] = await Promise.all([
+      this.projModel.findOne({ id: q.projectId }).lean(),
+      this.estModel.findOne({ id: q.estimationId }).lean(),
+    ]);
+    q.project = proj;
+    q.estimation = est;
+    return q as Quotation;
   }
 
   async update(id: string, dto: any, tenantId: string): Promise<Quotation> {
     await this.findOne(id, tenantId);
-    await this.quoteRepo.update({ id, tenantId }, dto);
+    await this.quoteModel.updateOne({ id, tenantId }, { $set: dto });
     return this.findOne(id, tenantId);
   }
 
   async delete(id: string, tenantId: string): Promise<void> {
     await this.findOne(id, tenantId);
-    await this.quoteRepo.delete({ id, tenantId });
+    await this.quoteModel.deleteOne({ id, tenantId });
   }
 
   private async aiDraft(project: any, est: any, tenantId: string): Promise<any> {
@@ -104,7 +143,7 @@ export class QuotationsService {
   private renderHtml(q: Quotation, est: any, proj: any): string {
     const fmt = (n: number) => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 });
     const grouped: Record<string,any[]> = {};
-    (est.items||[]).forEach((i: any) => { grouped[i.category] = grouped[i.category]||[]; grouped[i.category].push(i); });
+    ((est && est.items) || []).forEach((i: any) => { grouped[i.category] = grouped[i.category]||[]; grouped[i.category].push(i); });
     const Handlebars = require('handlebars');
     const compiled = Handlebars.compile(HTML_TEMPLATE);
     return compiled({
@@ -122,7 +161,8 @@ export class QuotationsService {
   }
 
   private async nextQuoteNumber(tenantId: string): Promise<string> {
-    const count = await this.quoteRepo.count({ where: { tenantId } });
+    const count = await this.quoteModel.countDocuments({ tenantId });
     return `QT-${new Date().getFullYear()}-${String(count+1).padStart(4,'0')}`;
   }
 }
+

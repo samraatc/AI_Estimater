@@ -1,62 +1,86 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ILike, DataSource } from 'typeorm';
-import { Project } from './entities/project.entity';
-import { AuditLog } from '../../common/entities/audit-log.entity';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Project, ProjectDocument } from './entities/project.entity';
+import { Client, ClientDocument } from '../clients/entities/client.entity';
+import { AuditLog, AuditLogDocument } from '../../common/entities/audit-log.entity';
 
 @Injectable()
 export class ProjectsService {
   constructor(
-    @InjectRepository(Project)  private repo:      Repository<Project>,
-    @InjectRepository(AuditLog) private auditRepo: Repository<AuditLog>,
-    private ds: DataSource,
+    @InjectModel(Project.name)  private projectModel: Model<ProjectDocument>,
+    @InjectModel(Client.name)   private clientModel:  Model<ClientDocument>,
+    @InjectModel(AuditLog.name) private auditModel:   Model<AuditLogDocument>,
   ) {}
 
   async findAll(tenantId: string, query: any = {}) {
     const { search, status, industry, page = 1, limit = 20 } = query;
-    const where: any = { tenantId };
-    if (status)   where.status   = status;
-    if (industry) where.industry = industry;
+    const filter: any = { tenantId, deletedAt: null };
+    if (status)   filter.status   = status;
+    if (industry) filter.industry = industry;
     if (search) {
-      const [data, total] = await this.repo.findAndCount({ where: [{ tenantId, name: ILike(`%${search}%`) }], relations: ['client'], order: { updatedAt: 'DESC' }, skip: (page-1)*limit, take: limit });
-      return { data, total, page, pages: Math.ceil(total/limit) };
+      filter.name = new RegExp(search, 'i');
     }
-    const [data, total] = await this.repo.findAndCount({ where, relations: ['client'], order: { updatedAt: 'DESC' }, skip: (page-1)*limit, take: limit });
-    return { data, total, page, pages: Math.ceil(total/limit) };
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [projects, total] = await Promise.all([
+      this.projectModel.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+      this.projectModel.countDocuments(filter),
+    ]);
+
+    const clientIds = projects.map(p => p.clientId).filter(Boolean);
+    const clients = await this.clientModel.find({ id: { $in: clientIds } }).lean();
+    const clientMap = new Map(clients.map(c => [c.id, c]));
+
+    const data = projects.map(p => {
+      p.client = p.clientId ? clientMap.get(p.clientId) : null;
+      return p;
+    });
+
+    return { data, total, page: Number(page), pages: Math.ceil(total / Number(limit)) };
   }
 
   async findOne(id: string, tenantId: string) {
-    const p = await this.repo.findOne({ where: { id, tenantId }, relations: ['client'] });
+    const p = await this.projectModel.findOne({ id, tenantId, deletedAt: null }).lean();
     if (!p) throw new NotFoundException('Project not found');
+    if (p.clientId) {
+      p.client = await this.clientModel.findOne({ id: p.clientId }).lean();
+    }
     return p;
   }
 
   async create(dto: any, tenantId: string, userId: string) {
-    const saved = await this.repo.save(this.repo.create({ ...dto, tenantId, createdBy: userId, status: dto.status || 'draft' })) as unknown as Project;
-    await this.auditRepo.save(this.auditRepo.create({ tenantId, userId, action: 'project.created', entityType: 'project', entityId: saved.id }));
-    return saved;
+    const created = await this.projectModel.create({ ...dto, tenantId, createdBy: userId, status: dto.status || 'draft' });
+    await this.auditModel.create({ tenantId, userId, action: 'project.created', entityType: 'project', entityId: created.id });
+    return created.toObject();
   }
 
   async update(id: string, dto: any, tenantId: string, userId: string) {
     await this.findOne(id, tenantId);
-    await this.repo.update({ id, tenantId }, dto);
+    await this.projectModel.updateOne({ id, tenantId }, { $set: dto });
     return this.findOne(id, tenantId);
   }
 
   async delete(id: string, tenantId: string, userId: string) {
-    const p = await this.findOne(id, tenantId);
-    await this.repo.softRemove(p);
+    await this.findOne(id, tenantId);
+    await this.projectModel.updateOne({ id, tenantId }, { $set: { deletedAt: new Date() } });
   }
 
   async clone(id: string, tenantId: string, userId: string) {
     const source = await this.findOne(id, tenantId);
-    const { id: _id, createdAt, updatedAt, deletedAt, ...rest } = source as any;
-    const cloned = await this.repo.save(this.repo.create({ ...rest, name: `${source.name} (Copy)`, status: 'draft', aiStatus: 'pending', clonedFrom: source.id, createdBy: userId }));
-    return cloned;
+    const { _id, id: _idStr, createdAt, updatedAt, deletedAt, client, ...rest } = source as any;
+    const cloned = await this.projectModel.create({ ...rest, name: `${source.name} (Copy)`, status: 'draft', aiStatus: 'pending', clonedFrom: source.id, createdBy: userId });
+    return cloned.toObject();
   }
 
   async getStats(tenantId: string) {
-    const [total, draft, active, completed] = await Promise.all([this.repo.count({ where: { tenantId } }), this.repo.count({ where: { tenantId, status: 'draft' } }), this.repo.count({ where: { tenantId, status: 'active' } }), this.repo.count({ where: { tenantId, status: 'completed' } })]);
+    const [total, draft, active, completed] = await Promise.all([
+      this.projectModel.countDocuments({ tenantId, deletedAt: null }),
+      this.projectModel.countDocuments({ tenantId, status: 'draft', deletedAt: null }),
+      this.projectModel.countDocuments({ tenantId, status: 'active', deletedAt: null }),
+      this.projectModel.countDocuments({ tenantId, status: 'completed', deletedAt: null }),
+    ]);
     return { total, draft, active, completed };
   }
 }
+

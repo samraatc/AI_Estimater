@@ -1,6 +1,6 @@
 import { Module }         from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule }  from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule }     from '@nestjs/bull';
 import { CacheModule }    from '@nestjs/cache-manager';
@@ -32,7 +32,7 @@ import { SearchModule }        from './modules/search/search.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [appConfig, databaseConfig, aiConfig, storageConfig], envFilePath: ['.env.local','.env'] }),
-    TypeOrmModule.forRootAsync({ inject: [ConfigService], useFactory: (c: ConfigService) => ({ type: 'postgres', host: c.get('database.host'), port: c.get('database.port'), username: c.get('database.username'), password: c.get('database.password'), database: c.get('database.name'), entities: [__dirname + '/**/*.entity{.ts,.js}'], synchronize: false, logging: c.get('app.nodeEnv') === 'development', ssl: c.get('database.ssl') ? { rejectUnauthorized: false } : false }) }),
+    MongooseModule.forRootAsync({ inject: [ConfigService], useFactory: (c: ConfigService) => ({ uri: c.get('database.uri') }) }),
     CacheModule.registerAsync({ isGlobal: true, inject: [ConfigService], useFactory: (c: ConfigService) => ({ store: redisStore as any, host: c.get('app.redisHost'), port: c.get('app.redisPort'), password: c.get('app.redisPassword') || undefined, ttl: 300 }) }),
     BullModule.forRootAsync({ inject: [ConfigService], useFactory: (c: ConfigService) => ({ redis: { host: c.get('app.redisHost'), port: c.get('app.redisPort'), password: c.get('app.redisPassword') || undefined } }) }),
     ThrottlerModule.forRoot([{ name:'short', ttl:1000, limit:20 }, { name:'medium', ttl:10000, limit:100 }, { name:'long', ttl:60000, limit:300 }]),
@@ -43,3 +43,4 @@ import { SearchModule }        from './modules/search/search.module';
   ],
 })
 export class AppModule {}
+

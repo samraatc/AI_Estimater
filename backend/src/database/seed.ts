@@ -1,5 +1,5 @@
 /**
- * EstimateOS — TypeORM Seed Script
+ * EstimateOS — MongoDB Seed Script
  *
  * USAGE:
  *   npx ts-node -r tsconfig-paths/register src/database/seed.ts
@@ -14,28 +14,33 @@
  */
 
 import 'reflect-metadata';
-import { DataSource, Repository } from 'typeorm';
+import mongoose, { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 
 // Load .env.local first (local dev overrides), then fallback to .env
-// This lets you run npm run seed locally without changing your docker .env
 dotenv.config({ path: path.join(__dirname, '../../.env.local') });
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 // Allow --local flag to force localhost regardless of .env
 if (process.argv.includes('--local')) {
-  process.env.DB_HOST    = 'localhost';
-  process.env.REDIS_HOST = 'localhost';
+  process.env.MONGODB_URI = 'mongodb://localhost:27017/estimateos';
 }
 
-// ── Entities (inline interfaces to avoid circular imports) ──
-import { Tenant }      from '../modules/tenants/entities/tenant.entity';
-import { Role }        from '../modules/users/entities/role.entity';
-import { User }        from '../modules/users/entities/user.entity';
-import { Client }      from '../modules/clients/entities/client.entity';
-import { PricingItem } from '../modules/pricing/entities/pricing-item.entity';
+// ── Entities & Schemas ─────────────────────────────────────
+import { Tenant, TenantSchema }           from '../modules/tenants/entities/tenant.entity';
+import { Role, RoleSchema }               from '../modules/users/entities/role.entity';
+import { User, UserSchema }               from '../modules/users/entities/user.entity';
+import { Client, ClientSchema }           from '../modules/clients/entities/client.entity';
+import { PricingItem, PricingItemSchema } from '../modules/pricing/entities/pricing-item.entity';
+
+const TenantModel: Model<any>      = mongoose.models.Tenant      || mongoose.model('Tenant', TenantSchema);
+const RoleModel: Model<any>        = mongoose.models.Role        || mongoose.model('Role', RoleSchema);
+const UserModel: Model<any>        = mongoose.models.User        || mongoose.model('User', UserSchema);
+const ClientModel: Model<any>      = mongoose.models.Client      || mongoose.model('Client', ClientSchema);
+const PricingItemModel: Model<any> = mongoose.models.PricingItem || mongoose.model('PricingItem', PricingItemSchema);
 
 // ── Colours for console output ──────────────────────────────
 const C = {
@@ -57,19 +62,6 @@ const log = {
   section: (msg: string) => console.log(`\n${C.bright}${C.cyan}── ${msg} ──${C.reset}`),
   row:     (msg: string) => console.log(`   ${C.gray}${msg}${C.reset}`),
 };
-
-// ── Database connection ──────────────────────────────────────
-const AppDataSource = new DataSource({
-  type:     'postgres',
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT || '5432', 10),
-  username: process.env.DB_USERNAME || 'estimateos',
-  password: process.env.DB_PASSWORD || 'changeme',
-  database: process.env.DB_NAME     || 'estimateos',
-  ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-  entities: [Tenant, Role, User, Client, PricingItem],
-  logging:  false,
-});
 
 // ════════════════════════════════════════════════════════════
 // SEED DATA DEFINITIONS
@@ -131,7 +123,6 @@ const ROLES_DATA = [
 ];
 
 // ── Users ─────────────────────────────────────────────────────
-// password is plain text here — it will be hashed before saving
 const USERS_DATA = [
   {
     email:     'admin@estimateos.com',
@@ -279,16 +270,10 @@ const PRICING_DATA = [
 // SEED FUNCTIONS
 // ════════════════════════════════════════════════════════════
 
-async function clearSeedData(
-  tenantRepo: Repository<Tenant>,
-  roleRepo: Repository<Role>,
-  userRepo: Repository<User>,
-  clientRepo: Repository<Client>,
-  pricingRepo: Repository<PricingItem>,
-): Promise<void> {
+async function clearSeedData(): Promise<void> {
   log.section('Clearing Previous Seed Data');
 
-  const tenant = await tenantRepo.findOne({ where: { slug: TENANT_SLUG } });
+  const tenant = await TenantModel.findOne({ slug: TENANT_SLUG }).exec();
   if (!tenant) {
     log.warn('No seed tenant found — nothing to clear');
     return;
@@ -296,48 +281,35 @@ async function clearSeedData(
 
   const tenantId = tenant.id;
 
-  // Delete in dependency order
-  const pricingCount = await pricingRepo.count({ where: { tenantId } });
-  if (pricingCount > 0) {
-    await pricingRepo.delete({ tenantId });
-    log.success(`Cleared ${pricingCount} pricing items`);
-  }
+  const pricingRes = await PricingItemModel.deleteMany({ tenantId }).exec();
+  if (pricingRes.deletedCount > 0) log.success(`Cleared ${pricingRes.deletedCount} pricing items`);
 
-  const clientCount = await clientRepo.count({ where: { tenantId } });
-  if (clientCount > 0) {
-    await clientRepo.delete({ tenantId });
-    log.success(`Cleared ${clientCount} clients`);
-  }
+  const clientRes = await ClientModel.deleteMany({ tenantId }).exec();
+  if (clientRes.deletedCount > 0) log.success(`Cleared ${clientRes.deletedCount} clients`);
 
-  const userCount = await userRepo.count({ where: { tenantId } });
-  if (userCount > 0) {
-    await userRepo.delete({ tenantId });
-    log.success(`Cleared ${userCount} users`);
-  }
+  const userRes = await UserModel.deleteMany({ tenantId }).exec();
+  if (userRes.deletedCount > 0) log.success(`Cleared ${userRes.deletedCount} users`);
 
-  const roleCount = await roleRepo.count({ where: { tenantId } });
-  if (roleCount > 0) {
-    await roleRepo.delete({ tenantId });
-    log.success(`Cleared ${roleCount} roles`);
-  }
+  const roleRes = await RoleModel.deleteMany({ tenantId }).exec();
+  if (roleRes.deletedCount > 0) log.success(`Cleared ${roleRes.deletedCount} roles`);
 
-  await tenantRepo.delete({ slug: TENANT_SLUG });
+  await TenantModel.deleteOne({ slug: TENANT_SLUG }).exec();
   log.success('Cleared seed tenant');
 }
 
-async function seedTenant(tenantRepo: Repository<Tenant>): Promise<Tenant> {
+async function seedTenant(): Promise<any> {
   log.section('Tenant');
 
-  let tenant = await tenantRepo.findOne({ where: { slug: TENANT_SLUG } });
+  let tenant = await TenantModel.findOne({ slug: TENANT_SLUG }).exec();
   if (tenant) {
-    // Ensure active
-    await tenantRepo.update(tenant.id, { status: 'active' });
+    await TenantModel.updateOne({ id: tenant.id }, { status: 'active' }).exec();
     tenant.status = 'active';
     log.warn(`Tenant already exists — using: ${tenant.name}`);
     return tenant;
   }
 
-  tenant = tenantRepo.create({
+  tenant = await TenantModel.create({
+    id:            uuidv4(),
     name:          'EstimateOS Demo',
     slug:          TENANT_SLUG,
     plan:          'enterprise',
@@ -357,36 +329,30 @@ async function seedTenant(tenantRepo: Repository<Tenant>): Promise<Tenant> {
     },
   });
 
-  await tenantRepo.save(tenant);
   log.success(`Created tenant: ${tenant.name} (${tenant.plan})`);
   return tenant;
 }
 
-async function seedRoles(
-  roleRepo: Repository<Role>,
-  tenantId: string,
-): Promise<Map<string, Role>> {
+async function seedRoles(tenantId: string): Promise<Map<string, any>> {
   log.section('Roles');
 
-  const roleMap = new Map<string, Role>();
+  const roleMap = new Map<string, any>();
 
   for (const roleData of ROLES_DATA) {
-    let role = await roleRepo.findOne({ where: { tenantId, name: roleData.name } });
+    let role = await RoleModel.findOne({ tenantId, name: roleData.name }).exec();
 
     if (role) {
-      // Update permissions in case they changed
-      await roleRepo.update(role.id, { permissions: roleData.permissions });
+      await RoleModel.updateOne({ id: role.id }, { permissions: roleData.permissions }).exec();
       role.permissions = roleData.permissions;
       log.warn(`Role exists, updated permissions: ${role.name}`);
     } else {
-      role = await roleRepo.save(
-        roleRepo.create({
-          tenantId,
-          name:        roleData.name,
-          isSystem:    roleData.isSystem,
-          permissions: roleData.permissions,
-        }),
-      ) as unknown as Role;
+      role = await RoleModel.create({
+        id:          uuidv4(),
+        tenantId,
+        name:        roleData.name,
+        isSystem:    roleData.isSystem,
+        permissions: roleData.permissions,
+      });
       log.success(`Created role: ${role.name} (${roleData.permissions.length} permissions)`);
     }
 
@@ -397,9 +363,8 @@ async function seedRoles(
 }
 
 async function seedUsers(
-  userRepo: Repository<User>,
   tenantId: string,
-  roleMap: Map<string, Role>,
+  roleMap: Map<string, any>,
   extraUsers?: Array<{
     email: string;
     password: string;
@@ -408,11 +373,11 @@ async function seedUsers(
     role: string;
     department?: string;
   }>,
-): Promise<User[]> {
+): Promise<any[]> {
   log.section('Users');
 
   const allUsers = [...USERS_DATA, ...(extraUsers || [])];
-  const created: User[] = [];
+  const created: any[] = [];
 
   for (const userData of allUsers) {
     const role = roleMap.get(userData.role);
@@ -422,32 +387,30 @@ async function seedUsers(
     }
 
     const passwordHash = await bcrypt.hash(userData.password, 12);
-    let user = await userRepo.findOne({ where: { email: userData.email.toLowerCase() } });
+    let user = await UserModel.findOne({ email: userData.email.toLowerCase() }).exec();
 
     if (user) {
-      // Update password and ensure active
-      await userRepo.update(user.id, {
+      await UserModel.updateOne({ id: user.id }, {
         passwordHash,
-        status:    'active',
-        roleId:    role.id,
-        firstName: userData.firstName,
-        lastName:  userData.lastName,
+        status:     'active',
+        roleId:     role.id,
+        firstName:  userData.firstName,
+        lastName:   userData.lastName,
         department: userData.department || null,
-      });
+      }).exec();
       log.warn(`User updated: ${userData.email} (password reset to: ${userData.password})`);
     } else {
-      user = await userRepo.save(
-        userRepo.create({
-          tenantId,
-          roleId:       role.id,
-          email:        userData.email.toLowerCase(),
-          passwordHash,
-          firstName:    userData.firstName,
-          lastName:     userData.lastName,
-          department:   userData.department || null,
-          status:       'active',
-        }),
-      ) as unknown as User;
+      user = await UserModel.create({
+        id:           uuidv4(),
+        tenantId,
+        roleId:       role.id,
+        email:        userData.email.toLowerCase(),
+        passwordHash,
+        firstName:    userData.firstName,
+        lastName:     userData.lastName,
+        department:   userData.department || null,
+        status:       'active',
+      });
       log.success(`Created user: ${userData.email} / ${userData.password} [${userData.role}]`);
     }
 
@@ -457,40 +420,35 @@ async function seedUsers(
   return created;
 }
 
-async function seedClients(
-  clientRepo: Repository<Client>,
-  tenantId: string,
-  adminUserId: string,
-): Promise<Client[]> {
+async function seedClients(tenantId: string, adminUserId: string): Promise<any[]> {
   log.section('Clients');
 
-  const created: Client[] = [];
+  const created: any[] = [];
 
   for (const data of CLIENTS_DATA) {
-    const existing = await clientRepo.findOne({ where: { tenantId, email: data.email } });
-    if (existing) {
+    let client = await ClientModel.findOne({ tenantId, email: data.email }).exec();
+    if (client) {
       log.warn(`Client exists: ${data.name}`);
-      created.push(existing);
+      created.push(client);
       continue;
     }
 
-    const client = await clientRepo.save(
-      clientRepo.create({
-        tenantId,
-        name:      data.name,
-        company:   data.company,
-        email:     data.email,
-        phone:     data.phone,
-        country:   data.country,
-        currency:  data.currency,
-        taxNumber: data.taxNumber,
-        address:   data.address,
-        notes:     data.notes,
-        status:    'active',
-        createdBy: adminUserId,
-        metadata:  {},
-      }),
-    ) as unknown as Client;
+    client = await ClientModel.create({
+      id:        uuidv4(),
+      tenantId,
+      name:      data.name,
+      company:   data.company,
+      email:     data.email,
+      phone:     data.phone,
+      country:   data.country,
+      currency:  data.currency,
+      taxNumber: data.taxNumber,
+      address:   data.address,
+      notes:     data.notes,
+      status:    'active',
+      createdBy: adminUserId,
+      metadata:  {},
+    });
 
     log.success(`Created client: ${client.name} (${client.country})`);
     created.push(client);
@@ -499,48 +457,42 @@ async function seedClients(
   return created;
 }
 
-async function seedPricing(
-  pricingRepo: Repository<PricingItem>,
-  tenantId: string,
-  adminUserId: string,
-): Promise<void> {
+async function seedPricing(tenantId: string, adminUserId: string): Promise<void> {
   log.section('Pricing Library');
 
   let created = 0;
   let skipped = 0;
 
   for (const item of PRICING_DATA) {
-    const existing = await pricingRepo.findOne({ where: { tenantId, code: item.code } });
+    const existing = await PricingItemModel.findOne({ tenantId, code: item.code }).exec();
     if (existing) {
-      // Update the rate in case prices changed
-      await pricingRepo.update(existing.id, { unitRate: item.unitRate });
+      await PricingItemModel.updateOne({ id: existing.id }, { unitRate: item.unitRate }).exec();
       skipped++;
       continue;
     }
 
-    await pricingRepo.save(
-      pricingRepo.create({
-        tenantId,
-        category:    item.category,
-        code:        item.code,
-        name:        item.name,
-        unit:        item.unit,
-        unitRate:    item.unitRate,
-        currency:    item.currency,
-        description: item.description,
-        isActive:    true,
-        source:      'system',
-        createdBy:   adminUserId,
-        metadata:    {},
-      }),
-    );
+    await PricingItemModel.create({
+      id:          uuidv4(),
+      tenantId,
+      category:    item.category,
+      code:        item.code,
+      name:        item.name,
+      unit:        item.unit,
+      unitRate:    item.unitRate,
+      currency:    item.currency,
+      description: item.description,
+      isActive:    true,
+      source:      'system',
+      createdBy:   adminUserId,
+      metadata:    {},
+    });
     created++;
   }
 
   log.success(`Pricing items: ${created} created, ${skipped} updated`);
 }
 
-function printSummary(roleMap: Map<string, Role>, users: User[]) {
+function printSummary(roleMap: Map<string, any>, users: any[]) {
   console.log(`\n${'═'.repeat(60)}`);
   console.log(`${C.bright}${C.green}  EstimateOS Seed Complete!${C.reset}`);
   console.log(`${'═'.repeat(60)}\n`);
@@ -573,23 +525,19 @@ async function main() {
   const isClear = args.includes('--clear');
   const isUsers = args.includes('--users');
 
-  console.log(`\n${C.bright}${C.cyan}EstimateOS — TypeORM Seed Script${C.reset}`);
-  console.log(`${C.gray}Database: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'estimateos'}${C.reset}\n`);
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/estimateos';
 
-  log.info('Connecting to database…');
-  await AppDataSource.initialize();
+  console.log(`\n${C.bright}${C.cyan}EstimateOS — MongoDB Seed Script${C.reset}`);
+  console.log(`${C.gray}Database: ${mongoUri}${C.reset}\n`);
+
+  log.info('Connecting to MongoDB…');
+  await mongoose.connect(mongoUri);
   log.success('Connected');
-
-  const tenantRepo  = AppDataSource.getRepository(Tenant);
-  const roleRepo    = AppDataSource.getRepository(Role);
-  const userRepo    = AppDataSource.getRepository(User);
-  const clientRepo  = AppDataSource.getRepository(Client);
-  const pricingRepo = AppDataSource.getRepository(PricingItem);
 
   try {
     // ── Clear mode ─────────────────────────────────────────
     if (isClear || isFresh) {
-      await clearSeedData(tenantRepo, roleRepo, userRepo, clientRepo, pricingRepo);
+      await clearSeedData();
       if (isClear) {
         log.success('Clear complete. Database is clean.');
         return;
@@ -597,36 +545,31 @@ async function main() {
     }
 
     // ── Seed tenant ────────────────────────────────────────
-    const tenant = await seedTenant(tenantRepo);
+    const tenant = await seedTenant();
 
     // ── Seed roles ─────────────────────────────────────────
-    const roleMap = await seedRoles(roleRepo, tenant.id);
+    const roleMap = await seedRoles(tenant.id);
 
     // ── Seed users ─────────────────────────────────────────
-    // To add custom users, pass them as extraUsers:
-    const extraUsers = isUsers ? [
-      // Example: uncomment and edit to add more users
-      // { email: 'newuser@company.com', password: 'NewUser@123!', firstName: 'New', lastName: 'User', role: 'estimator', department: 'Projects' },
-    ] : [];
-
-    const users = await seedUsers(userRepo, tenant.id, roleMap, extraUsers);
+    const extraUsers = isUsers ? [] : [];
+    const users = await seedUsers(tenant.id, roleMap, extraUsers);
 
     // ── Seed clients ───────────────────────────────────────
     const adminUser = users.find(u => u.email === 'admin@estimateos.com');
     if (adminUser) {
-      await seedClients(clientRepo, tenant.id, adminUser.id);
+      await seedClients(tenant.id, adminUser.id);
     }
 
     // ── Seed pricing ───────────────────────────────────────
     if (adminUser) {
-      await seedPricing(pricingRepo, tenant.id, adminUser.id);
+      await seedPricing(tenant.id, adminUser.id);
     }
 
     // ── Print summary ──────────────────────────────────────
     printSummary(roleMap, users);
 
   } finally {
-    await AppDataSource.destroy();
+    await mongoose.disconnect();
     log.info('Database connection closed');
   }
 }

@@ -1,15 +1,20 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-@Entity('refresh_tokens')
+export type RefreshTokenDocument = RefreshToken & Document;
+
+@Schema({ timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'refresh_tokens' })
 export class RefreshToken {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ name: 'user_id' }) userId: string;
-  @ManyToOne(() => User, { onDelete: 'CASCADE' }) @JoinColumn({ name: 'user_id' }) user: User;
-  @Column({ name: 'token_hash', unique: true }) tokenHash: string;
-  @Column({ name: 'expires_at' }) expiresAt: Date;
-  @Column({ name: 'ip_address', nullable: true }) ipAddress: string;
-  @Column({ name: 'user_agent', nullable: true, type: 'text' }) userAgent: string;
-  @Column({ default: false }) revoked: boolean;
-  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
+  @Prop({ default: uuidv4, index: true }) id: string;
+  @Prop({ required: true, index: true }) userId: string;
+  @Prop({ required: true, unique: true, index: true }) tokenHash: string;
+  @Prop({ required: true, type: Date }) expiresAt: Date;
+  @Prop() ipAddress: string;
+  @Prop() userAgent: string;
+  @Prop({ default: false }) revoked: boolean;
+  createdAt: Date;
 }
+
+export const RefreshTokenSchema = SchemaFactory.createForClass(RefreshToken);
+

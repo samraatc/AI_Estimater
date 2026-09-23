@@ -1,14 +1,15 @@
 import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectModel } from '@nestjs/mongoose';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Repository } from 'typeorm';
+import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, createHash } from 'crypto';
-import { User } from '../users/entities/user.entity';
-import { RefreshToken } from './entities/refresh-token.entity';
-import { Tenant } from '../tenants/entities/tenant.entity';
-import { AuditLog } from '../../common/entities/audit-log.entity';
+import { User, UserDocument } from '../users/entities/user.entity';
+import { RefreshToken, RefreshTokenDocument } from './entities/refresh-token.entity';
+import { Tenant, TenantDocument } from '../tenants/entities/tenant.entity';
+import { Role, RoleDocument } from '../users/entities/role.entity';
+import { AuditLog, AuditLogDocument } from '../../common/entities/audit-log.entity';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -17,61 +18,90 @@ import { AuthResponse } from './interfaces/auth-response.interface';
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(User)         private userRepo:   Repository<User>,
-    @InjectRepository(RefreshToken) private tokenRepo:  Repository<RefreshToken>,
-    @InjectRepository(Tenant)       private tenantRepo: Repository<Tenant>,
-    @InjectRepository(AuditLog)     private auditRepo:  Repository<AuditLog>,
+    @InjectModel(User.name)         private userModel:   Model<UserDocument>,
+    @InjectModel(RefreshToken.name) private tokenModel:  Model<RefreshTokenDocument>,
+    @InjectModel(Tenant.name)       private tenantModel: Model<TenantDocument>,
+    @InjectModel(Role.name)         private roleModel:   Model<RoleDocument>,
+    @InjectModel(AuditLog.name)     private auditModel:  Model<AuditLogDocument>,
     private jwtService: JwtService,
     private cfg: ConfigService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<User | null> {
-    const user = await this.userRepo.findOne({ where: { email: email.toLowerCase() }, relations: ['role', 'tenant'] });
+    const user = await this.userModel.findOne({ email: email.toLowerCase() }).lean();
     if (!user || user.status !== 'active') return null;
     const valid = await bcrypt.compare(password, user.passwordHash);
-    return valid ? user : null;
+    if (!valid) return null;
+
+    const [role, tenant] = await Promise.all([
+      this.roleModel.findOne({ id: user.roleId }).lean(),
+      this.tenantModel.findOne({ id: user.tenantId }).lean(),
+    ]);
+
+    user.role = role;
+    user.tenant = tenant;
+    return user as User;
   }
 
   async login(dto: LoginDto, ip: string, userAgent: string): Promise<AuthResponse> {
     const user = await this.validateUser(dto.email, dto.password);
     if (!user) throw new UnauthorizedException('Invalid email or password');
     if (user.tenant?.status === 'suspended') throw new ForbiddenException('Account suspended');
-    await this.userRepo.update(user.id, { lastLoginAt: new Date() });
+    await this.userModel.updateOne({ id: user.id }, { $set: { lastLoginAt: new Date() } });
     const tokens = await this.generateTokenPair(user, ip, userAgent);
-    await this.auditRepo.save(this.auditRepo.create({ tenantId: user.tenantId, userId: user.id, action: 'auth.login', ipAddress: ip }));
+    await this.auditModel.create({ tenantId: user.tenantId, userId: user.id, action: 'auth.login', ipAddress: ip });
     return { ...tokens, expiresIn: this.cfg.get('app.jwtExpiry', '15m'), user: this.userToDto(user) };
   }
 
   async refreshToken(dto: RefreshTokenDto, ip: string): Promise<AuthResponse> {
     const tokenHash = createHash('sha256').update(dto.refreshToken).digest('hex');
-    const stored = await this.tokenRepo.findOne({ where: { tokenHash, revoked: false }, relations: ['user', 'user.role', 'user.tenant'] });
+    const stored = await this.tokenModel.findOne({ tokenHash, revoked: false }).lean();
     if (!stored) throw new UnauthorizedException('Invalid refresh token');
-    if (stored.expiresAt < new Date()) { await this.tokenRepo.update(stored.id, { revoked: true }); throw new UnauthorizedException('Refresh token expired'); }
-    await this.tokenRepo.update(stored.id, { revoked: true });
-    const tokens = await this.generateTokenPair(stored.user, ip, '');
-    return { ...tokens, expiresIn: this.cfg.get('app.jwtExpiry', '15m'), user: this.userToDto(stored.user) };
+    if (stored.expiresAt < new Date()) {
+      await this.tokenModel.updateOne({ id: stored.id }, { $set: { revoked: true } });
+      throw new UnauthorizedException('Refresh token expired');
+    }
+    await this.tokenModel.updateOne({ id: stored.id }, { $set: { revoked: true } });
+
+    const user = await this.userModel.findOne({ id: stored.userId }).lean();
+    if (!user) throw new UnauthorizedException('User not found');
+    const [role, tenant] = await Promise.all([
+      this.roleModel.findOne({ id: user.roleId }).lean(),
+      this.tenantModel.findOne({ id: user.tenantId }).lean(),
+    ]);
+    user.role = role;
+    user.tenant = tenant;
+
+    const tokens = await this.generateTokenPair(user as User, ip, '');
+    return { ...tokens, expiresIn: this.cfg.get('app.jwtExpiry', '15m'), user: this.userToDto(user as User) };
   }
 
   async logout(userId: string, refreshToken: string): Promise<void> {
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
-    await this.tokenRepo.update({ userId, tokenHash }, { revoked: true });
+    await this.tokenModel.updateOne({ userId, tokenHash }, { $set: { revoked: true } });
   }
 
   async logoutAll(userId: string): Promise<void> {
-    await this.tokenRepo.update({ userId, revoked: false }, { revoked: true });
+    await this.tokenModel.updateMany({ userId, revoked: false }, { $set: { revoked: true } });
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
-    const user = await this.userRepo.findOneOrFail({ where: { id: userId } });
+    const user = await this.userModel.findOne({ id: userId });
+    if (!user) throw new NotFoundException('User not found');
     if (!await bcrypt.compare(currentPassword, user.passwordHash)) throw new BadRequestException('Current password is incorrect');
-    await this.userRepo.update(userId, { passwordHash: await bcrypt.hash(newPassword, 12) });
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.userModel.updateOne({ id: userId }, { $set: { passwordHash } });
     await this.logoutAll(userId);
   }
 
   async getProfile(userId: string) {
-    const user = await this.userRepo.findOne({ where: { id: userId }, relations: ['role', 'tenant'] });
+    const user = await this.userModel.findOne({ id: userId }).lean();
     if (!user) throw new NotFoundException('User not found');
-    return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl, department: user.department, role: user.role?.name, permissions: user.role?.permissions || [], tenantId: user.tenantId, tenantName: user.tenant?.name, tenantSlug: user.tenant?.slug, lastLoginAt: user.lastLoginAt, createdAt: user.createdAt };
+    const [role, tenant] = await Promise.all([
+      this.roleModel.findOne({ id: user.roleId }).lean(),
+      this.tenantModel.findOne({ id: user.tenantId }).lean(),
+    ]);
+    return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, avatarUrl: user.avatarUrl, department: user.department, role: role?.name, permissions: role?.permissions || [], tenantId: user.tenantId, tenantName: tenant?.name, tenantSlug: tenant?.slug, lastLoginAt: user.lastLoginAt, createdAt: user.createdAt };
   }
 
   private async generateTokenPair(user: User, ip: string, ua: string) {
@@ -80,7 +110,7 @@ export class AuthService {
     const rawRefresh   = randomBytes(64).toString('hex');
     const tokenHash    = createHash('sha256').update(rawRefresh).digest('hex');
     const expiresAt    = new Date(); expiresAt.setDate(expiresAt.getDate() + this.cfg.get<number>('app.refreshTokenDays', 30));
-    await this.tokenRepo.save(this.tokenRepo.create({ userId: user.id, tokenHash, expiresAt, ipAddress: ip, userAgent: ua }));
+    await this.tokenModel.create({ userId: user.id, tokenHash, expiresAt, ipAddress: ip, userAgent: ua });
     return { accessToken, refreshToken: rawRefresh };
   }
 
@@ -88,3 +118,4 @@ export class AuthService {
     return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role?.name, permissions: user.role?.permissions || [], tenantId: user.tenantId, tenantName: user.tenant?.name, tenantSlug: user.tenant?.slug };
   }
 }
+

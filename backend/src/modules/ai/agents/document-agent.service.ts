@@ -3,9 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { OpenAI } from 'openai';
 import { StorageService } from '../../storage/storage.service';
 import { DocumentContext } from '../interfaces/document-context.interface';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ProjectFile } from '../../files/entities/project-file.entity';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ProjectFile, ProjectFileDocument } from '../../files/entities/project-file.entity';
 
 @Injectable()
 export class DocumentAgentService {
@@ -15,7 +15,7 @@ export class DocumentAgentService {
   constructor(
     private cfg: ConfigService,
     private storage: StorageService,
-    @InjectRepository(ProjectFile) private fileRepo: Repository<ProjectFile>,
+    @InjectModel(ProjectFile.name) private fileModel: Model<ProjectFileDocument>,
   ) {
     this.openai = new OpenAI({ apiKey: cfg.get('ai.openaiApiKey') });
   }
@@ -31,14 +31,14 @@ export class DocumentAgentService {
         if (text?.trim()) {
           texts.push(`=== ${file.originalName} ===\n${text}`);
           // Update file with extracted text
-          await this.fileRepo.update(file.id, {
+          await this.fileModel.updateOne({ id: file.id }, {
             ocrText:     text,
             ocrStatus:   'done',
             parseStatus: 'done',
           });
         } else {
           this.logger.warn(`No text extracted from: ${file.originalName}`);
-          await this.fileRepo.update(file.id, {
+          await this.fileModel.updateOne({ id: file.id }, {
             ocrStatus:   'done',
             parseStatus: 'done',
             ocrText:     `[No text content extracted from ${file.originalName}]`,
@@ -46,7 +46,7 @@ export class DocumentAgentService {
         }
       } catch (err: any) {
         this.logger.error(`Failed to process ${file.originalName}: ${err.message}`);
-        await this.fileRepo.update(file.id, { ocrStatus: 'failed', parseStatus: 'failed' }).catch(() => {});
+        await this.fileModel.updateOne({ id: file.id }, { ocrStatus: 'failed', parseStatus: 'failed' }).catch(() => {});
       }
     }
 

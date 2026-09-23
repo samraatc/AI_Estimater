@@ -1,23 +1,28 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Tenant } from '../../tenants/entities/tenant.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-@Entity('clients')
+export type ClientDocument = Client & Document;
+
+@Schema({ timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' }, collection: 'clients' })
 export class Client {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ name: 'tenant_id' }) tenantId: string;
-  @ManyToOne(() => Tenant) @JoinColumn({ name: 'tenant_id' }) tenant: Tenant;
-  @Column() name: string;
-  @Column({ nullable: true }) company: string;
-  @Column({ nullable: true }) email: string;
-  @Column({ nullable: true }) phone: string;
-  @Column({ nullable: true, type: 'text' }) address: string;
-  @Column({ nullable: true }) country: string;
-  @Column({ default: 'USD' }) currency: string;
-  @Column({ name: 'tax_number', nullable: true }) taxNumber: string;
-  @Column({ nullable: true, type: 'text' }) notes: string;
-  @Column({ default: 'active' }) status: string;
-  @Column({ type: 'jsonb', default: '{}' }) metadata: Record<string, any>;
-  @Column({ name: 'created_by', nullable: true }) createdBy: string;
-  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
-  @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;
+  @Prop({ default: uuidv4, index: true }) id: string;
+  @Prop({ required: true, index: true }) tenantId: string;
+  @Prop({ required: true }) name: string;
+  @Prop() company: string;
+  @Prop({ index: true }) email: string;
+  @Prop() phone: string;
+  @Prop() address: string;
+  @Prop() country: string;
+  @Prop({ default: 'USD' }) currency: string;
+  @Prop() taxNumber: string;
+  @Prop() notes: string;
+  @Prop({ default: 'active' }) status: string;
+  @Prop({ type: Object, default: {} }) metadata: Record<string, any>;
+  @Prop() createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+export const ClientSchema = SchemaFactory.createForClass(Client);
+

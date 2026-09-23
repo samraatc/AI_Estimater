@@ -1,9 +1,20 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ClientsService } from './clients.service';
 import { ClientsController } from './clients.controller';
-import { Client } from './entities/client.entity';
-import { AuditLog } from '../../common/entities/audit-log.entity';
+import { Client, ClientSchema } from './entities/client.entity';
+import { AuditLog, AuditLogSchema } from '../../common/entities/audit-log.entity';
 
-@Module({ imports: [TypeOrmModule.forFeature([Client, AuditLog])], controllers: [ClientsController], providers: [ClientsService], exports: [ClientsService] })
+@Module({
+  imports: [
+    MongooseModule.forFeature([
+      { name: Client.name, schema: ClientSchema },
+      { name: AuditLog.name, schema: AuditLogSchema },
+    ]),
+  ],
+  controllers: [ClientsController],
+  providers: [ClientsService],
+  exports: [ClientsService],
+})
 export class ClientsModule {}
+

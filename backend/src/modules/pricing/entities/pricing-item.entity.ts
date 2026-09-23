@@ -1,24 +1,29 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Tenant } from '../../tenants/entities/tenant.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-@Entity('pricing_items')
+export type PricingItemDocument = PricingItem & Document;
+
+@Schema({ timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' }, collection: 'pricing_items' })
 export class PricingItem {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ name: 'tenant_id' }) tenantId: string;
-  @ManyToOne(() => Tenant) @JoinColumn({ name: 'tenant_id' }) tenant: Tenant;
-  @Column() category: string;
-  @Column({ nullable: true }) code: string;
-  @Column() name: string;
-  @Column() unit: string;
-  @Column({ name: 'unit_rate', type: 'decimal', precision: 14, scale: 4 }) unitRate: number;
-  @Column({ default: 'USD' }) currency: string;
-  @Column({ nullable: true, type: 'text' }) description: string;
-  @Column({ name: 'is_active', default: true }) isActive: boolean;
-  @Column({ name: 'valid_from', nullable: true, type: 'date' }) validFrom: Date;
-  @Column({ name: 'valid_until', nullable: true, type: 'date' }) validUntil: Date;
-  @Column({ nullable: true }) source: string;
-  @Column({ type: 'jsonb', default: '{}' }) metadata: Record<string, any>;
-  @Column({ name: 'created_by', nullable: true }) createdBy: string;
-  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
-  @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;
+  @Prop({ default: uuidv4, index: true }) id: string;
+  @Prop({ required: true, index: true }) tenantId: string;
+  @Prop({ required: true, index: true }) category: string;
+  @Prop() code: string;
+  @Prop({ required: true }) name: string;
+  @Prop({ required: true }) unit: string;
+  @Prop({ required: true, default: 0 }) unitRate: number;
+  @Prop({ default: 'USD' }) currency: string;
+  @Prop() description: string;
+  @Prop({ default: true }) isActive: boolean;
+  @Prop({ type: Date }) validFrom: Date;
+  @Prop({ type: Date }) validUntil: Date;
+  @Prop() source: string;
+  @Prop({ type: Object, default: {} }) metadata: Record<string, any>;
+  @Prop() createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
+
+export const PricingItemSchema = SchemaFactory.createForClass(PricingItem);
+

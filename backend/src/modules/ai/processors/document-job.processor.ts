@@ -1,9 +1,9 @@
 import { Processor, Process } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { Job } from 'bull';
-import { ProjectFile } from '../../files/entities/project-file.entity';
+import { ProjectFile, ProjectFileDocument } from '../../files/entities/project-file.entity';
 import { DocumentAgentService } from '../agents/document-agent.service';
 import { EmbeddingService } from '../services/embedding.service';
 
@@ -12,7 +12,7 @@ export class DocumentJobProcessor {
   private readonly logger = new Logger(DocumentJobProcessor.name);
 
   constructor(
-    @InjectRepository(ProjectFile) private fileRepo: Repository<ProjectFile>,
+    @InjectModel(ProjectFile.name) private fileModel: Model<ProjectFileDocument>,
     private docAgent: DocumentAgentService,
     private embedding: EmbeddingService,
   ) {}
@@ -21,19 +21,19 @@ export class DocumentJobProcessor {
   async handleProcessFile(job: Job<{ fileId: string; projectId: string; tenantId: string }>) {
     const { fileId, projectId, tenantId } = job.data;
     this.logger.log(`Processing file ${fileId}`);
-    const file = await this.fileRepo.findOne({ where: { id: fileId } });
+    const file = await this.fileModel.findOne({ id: fileId }).exec();
     if (!file) return;
     try {
-      await this.fileRepo.update(fileId, { ocrStatus: 'processing' });
+      await this.fileModel.updateOne({ id: fileId }, { ocrStatus: 'processing' }).exec();
       const text = await this.docAgent.extractText(file);
-      await this.fileRepo.update(fileId, { ocrText: text, ocrStatus: 'done', parseStatus: 'done' });
+      await this.fileModel.updateOne({ id: fileId }, { ocrText: text, ocrStatus: 'done', parseStatus: 'done' }).exec();
       if (text?.trim()) {
         await this.embedding.embedAndStore({ fileId, projectId, tenantId, text });
       }
       this.logger.log(`File ${fileId} processed`);
     } catch (err: any) {
       this.logger.error(`File ${fileId} failed: ${err.message}`);
-      await this.fileRepo.update(fileId, { ocrStatus: 'failed' });
+      await this.fileModel.updateOne({ id: fileId }, { ocrStatus: 'failed' }).exec();
       throw err;
     }
   }

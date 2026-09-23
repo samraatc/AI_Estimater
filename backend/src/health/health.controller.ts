@@ -1,20 +1,23 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 import { Public } from '../modules/auth/decorators/public.decorator';
 
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
-  constructor(@InjectDataSource() private ds: DataSource) {}
+  constructor(@InjectConnection() private connection: Connection) {}
 
   @Get()
   @Public()
   @ApiOperation({ summary: 'Health check' })
   async check() {
-    let dbOk = false;
-    try { await this.ds.query('SELECT 1'); dbOk = true; } catch {}
-    return { status: dbOk ? 'ok' : 'degraded', database: dbOk ? 'connected' : 'disconnected', timestamp: new Date().toISOString() };
+    const isConnected = this.connection.readyState === 1;
+    return {
+      status: isConnected ? 'ok' : 'degraded',
+      database: isConnected ? 'connected' : 'disconnected',
+      timestamp: new Date().toISOString(),
+    };
   }
 }

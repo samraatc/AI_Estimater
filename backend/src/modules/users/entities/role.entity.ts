@@ -1,13 +1,18 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Tenant } from '../../tenants/entities/tenant.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-@Entity('roles')
+export type RoleDocument = Role & Document;
+
+@Schema({ timestamps: { createdAt: 'createdAt', updatedAt: false }, collection: 'roles' })
 export class Role {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ name: 'tenant_id' }) tenantId: string;
-  @ManyToOne(() => Tenant) @JoinColumn({ name: 'tenant_id' }) tenant: Tenant;
-  @Column() name: string;
-  @Column({ name: 'is_system', default: false }) isSystem: boolean;
-  @Column({ type: 'jsonb', default: '[]' }) permissions: string[];
-  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
+  @Prop({ default: uuidv4, index: true }) id: string;
+  @Prop({ required: true, index: true }) tenantId: string;
+  @Prop({ required: true }) name: string;
+  @Prop({ default: false }) isSystem: boolean;
+  @Prop({ type: [String], default: [] }) permissions: string[];
+  createdAt: Date;
 }
+
+export const RoleSchema = SchemaFactory.createForClass(Role);
+

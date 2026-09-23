@@ -1,36 +1,41 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Tenant } from '../../tenants/entities/tenant.entity';
-import { Client } from '../../clients/entities/client.entity';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 
-@Entity('projects')
+export type ProjectDocument = Project & Document;
+
+@Schema({ timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' }, collection: 'projects' })
 export class Project {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ name: 'tenant_id' }) tenantId: string;
-  @ManyToOne(() => Tenant) @JoinColumn({ name: 'tenant_id' }) tenant: Tenant;
-  @Column({ name: 'client_id', nullable: true }) clientId: string;
-  @ManyToOne(() => Client, { nullable: true }) @JoinColumn({ name: 'client_id' }) client: Client;
-  @Column({ name: 'created_by', nullable: true }) createdBy: string;
-  @Column({ name: 'assigned_to', nullable: true }) assignedTo: string;
-  @Column() name: string;
-  @Column({ name: 'reference_number', nullable: true }) referenceNumber: string;
-  @Column({ nullable: true, type: 'text' }) description: string;
-  @Column({ nullable: true }) industry: string;
-  @Column({ name: 'project_type', nullable: true }) projectType: string;
-  @Column({ nullable: true }) location: string;
-  @Column({ default: 'USD' }) currency: string;
-  @Column({ default: 'draft' }) status: string;
-  @Column({ name: 'start_date', nullable: true, type: 'date' }) startDate: Date;
-  @Column({ name: 'end_date', nullable: true, type: 'date' }) endDate: Date;
-  @Column({ nullable: true, type: 'date' }) deadline: Date;
-  @Column({ name: 'ai_status', default: 'pending' }) aiStatus: string;
-  @Column({ name: 'ai_processed_at', nullable: true }) aiProcessedAt: Date;
-  @Column({ name: 'ai_confidence', nullable: true, type: 'decimal', precision: 5, scale: 2 }) aiConfidence: number;
-  @Column({ name: 'ai_summary', nullable: true, type: 'text' }) aiSummary: string;
-  @Column({ name: 'storage_path', nullable: true }) storagePath: string;
-  @Column({ type: 'text', array: true, default: '{}' }) tags: string[];
-  @Column({ type: 'jsonb', default: '{}' }) metadata: Record<string, any>;
-  @Column({ name: 'cloned_from', nullable: true }) clonedFrom: string;
-  @CreateDateColumn({ name: 'created_at' }) createdAt: Date;
-  @UpdateDateColumn({ name: 'updated_at' }) updatedAt: Date;
-  @DeleteDateColumn({ name: 'deleted_at' }) deletedAt: Date;
+  @Prop({ default: uuidv4, index: true }) id: string;
+  @Prop({ required: true, index: true }) tenantId: string;
+  @Prop({ index: true }) clientId: string;
+  @Prop() createdBy: string;
+  @Prop() assignedTo: string;
+  @Prop({ required: true, index: true }) name: string;
+  @Prop() referenceNumber: string;
+  @Prop() description: string;
+  @Prop() industry: string;
+  @Prop() projectType: string;
+  @Prop() location: string;
+  @Prop({ default: 'USD' }) currency: string;
+  @Prop({ default: 'draft', index: true }) status: string;
+  @Prop({ type: Date }) startDate: Date;
+  @Prop({ type: Date }) endDate: Date;
+  @Prop({ type: Date }) deadline: Date;
+  @Prop({ default: 'pending', index: true }) aiStatus: string;
+  @Prop({ type: Date }) aiProcessedAt: Date;
+  @Prop({ type: Number }) aiConfidence: number;
+  @Prop() aiSummary: string;
+  @Prop() storagePath: string;
+  @Prop({ type: [String], default: [] }) tags: string[];
+  @Prop({ type: Object, default: {} }) metadata: Record<string, any>;
+  @Prop() clonedFrom: string;
+  @Prop({ type: Date, default: null }) deletedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+
+  client?: any;
 }
+
+export const ProjectSchema = SchemaFactory.createForClass(Project);
+
