@@ -35,6 +35,19 @@ export class AiOrchestrationService {
 
   async runFullPipeline(projectId: string, tenantId: string, userId: string) {
     await this.projectModel.updateOne({ id: projectId }, { $set: { aiStatus: 'processing' } });
+
+    // In serverless environments (Vercel), run directly as there is no persistent background worker
+    if (process.env.VERCEL || !this.estQueue) {
+      try {
+        await this.executePipeline(projectId, tenantId, userId);
+        return { message: 'AI analysis completed successfully.' };
+      } catch (err: any) {
+        this.logger.error(`Direct pipeline execution failed: ${err.message}`);
+        await this.projectModel.updateOne({ id: projectId }, { $set: { aiStatus: 'failed' } });
+        throw err;
+      }
+    }
+
     const job = await this.estQueue.add('full-pipeline', { projectId, tenantId, userId }, { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, removeOnComplete: 50 });
     return { jobId: String(job.id), message: 'AI analysis started.' };
   }
