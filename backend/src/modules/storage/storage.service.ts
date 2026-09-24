@@ -31,9 +31,14 @@ export class StorageService implements OnModuleInit {
       this.logger.log('Cloudinary storage enabled');
     } else {
       try {
+        const rawEndpoint = cfg.get<string>('storage.endpoint', 'localhost') || 'localhost';
+        const cleanEndpoint = rawEndpoint.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').split(':')[0] || 'localhost';
+        const rawPort = cfg.get('storage.port', 9000);
+        const cleanPort = typeof rawPort === 'string' ? parseInt(rawPort, 10) : Number(rawPort) || 9000;
+
         this.minioClient = new Minio.Client({
-          endPoint:  cfg.get('storage.endpoint', 'localhost'),
-          port:      cfg.get('storage.port', 9000),
+          endPoint:  cleanEndpoint,
+          port:      cleanPort,
           useSSL:    cfg.get('storage.useSsl', false),
           accessKey: cfg.get('storage.accessKey', 'minioadmin'),
           secretKey: cfg.get('storage.secretKey', 'changeme'),
