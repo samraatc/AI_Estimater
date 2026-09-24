@@ -56,27 +56,27 @@ export default function DashboardPage() {
   );
 
   if (isLoading) return (
-    <div className="p-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
       {[...Array(8)].map((_,i) => <div key={i} className="bg-white rounded-xl border border-gray-200 h-28 animate-pulse"/>)}
     </div>
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-screen-xl">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-screen-xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Business overview & AI performance</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Business overview & AI performance</p>
         </div>
         <button
           onClick={() => router.push('/projects')}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700">
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-sm self-start sm:self-auto">
           <Plus size={15}/> New Project
         </button>
       </div>
 
       {/* KPI Grid — all clickable */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KPI label="Total Projects"     value={kpis.totalProjects||0}                           icon={FolderOpen}  color="bg-blue-600"    href="/projects"/>
         <KPI label="Total Estimations"  value={kpis.totalEstimations||0}                        icon={FileText}    color="bg-violet-600"  href="/estimations"/>
         <KPI label="Win Rate"           value={`${kpis.winRate||0}%`}                           icon={TrendingUp}  color="bg-green-600"   href="/quotations"/>
@@ -92,9 +92,9 @@ export default function DashboardPage() {
         {/* Revenue trend */}
         <div
           onClick={() => router.push('/analytics')}
-          className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5 cursor-pointer hover:border-blue-200 transition-all">
+          className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4 sm:p-5 cursor-pointer hover:border-blue-200 transition-all">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Revenue Trend</h3>
+            <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Revenue Trend</h3>
             <span className="text-xs text-blue-600 flex items-center gap-1">View analytics <ArrowRight size={11}/></span>
           </div>
           {monthly.length ? (
@@ -123,9 +123,9 @@ export default function DashboardPage() {
         {/* Cost breakdown */}
         <div
           onClick={() => router.push('/analytics')}
-          className="bg-white rounded-xl border border-gray-200 p-5 cursor-pointer hover:border-blue-200 transition-all">
+          className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 cursor-pointer hover:border-blue-200 transition-all">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Cost Breakdown</h3>
+            <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Cost Breakdown</h3>
             <ArrowRight size={13} className="text-gray-300"/>
           </div>
           {bd.length ? (
@@ -159,62 +159,64 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Projects — fully clickable */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Recent Projects</h3>
-          <button onClick={() => router.push('/projects')} className="text-sm text-blue-600 hover:underline font-medium flex items-center gap-1">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Recent Projects</h3>
+          <button onClick={() => router.push('/projects')} className="text-xs sm:text-sm text-blue-600 hover:underline font-medium flex items-center gap-1">
             View all <ArrowRight size={12}/>
           </button>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              {['Project Name', 'Industry', 'Status', 'AI Status', 'Last Updated'].map(h => (
-                <th key={h} className="text-left text-xs font-medium text-gray-500 px-5 py-3">{h}</th>
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-sm min-w-[560px]">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                {['Project Name', 'Industry', 'Status', 'AI Status', 'Last Updated'].map(h => (
+                  <th key={h} className="text-left text-xs font-medium text-gray-500 px-4 sm:px-5 py-3 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {recent.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">
+                    No projects yet —{' '}
+                    <button onClick={() => router.push('/projects')} className="text-blue-600 hover:underline">
+                      create the first one
+                    </button>
+                  </td>
+                </tr>
+              ) : recent.map((p: any) => (
+                <tr key={p.id}
+                  onClick={() => router.push(`/projects/${p.id}`)}
+                  className="border-b border-gray-50 hover:bg-blue-50/70 cursor-pointer group transition-colors">
+                  <td className="px-4 sm:px-5 py-3.5 font-medium text-gray-900 group-hover:text-blue-700">
+                    {p.name}
+                  </td>
+                  <td className="px-4 sm:px-5 py-3.5 text-gray-500 text-xs capitalize whitespace-nowrap">
+                    {p.industry ? p.industry.replace('_', ' & ').replace('oil & gas', 'Oil & Gas') : '—'}
+                  </td>
+                  <td className="px-4 sm:px-5 py-3.5 whitespace-nowrap">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status]||'bg-gray-100 text-gray-600'}`}>
+                      {STATUS_LABELS[p.status] || p.status}
+                    </span>
+                  </td>
+                  <td className="px-4 sm:px-5 py-3.5 whitespace-nowrap">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.aiStatus]||'bg-gray-100 text-gray-500'}`}>
+                      {AI_LABELS[p.aiStatus] || p.aiStatus}
+                    </span>
+                  </td>
+                  <td className="px-4 sm:px-5 py-3.5 text-gray-400 text-xs whitespace-nowrap">
+                    {new Date(p.updatedAt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                  </td>
+                </tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {recent.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">
-                  No projects yet —{' '}
-                  <button onClick={() => router.push('/projects')} className="text-blue-600 hover:underline">
-                    create the first one
-                  </button>
-                </td>
-              </tr>
-            ) : recent.map((p: any) => (
-              <tr key={p.id}
-                onClick={() => router.push(`/projects/${p.id}`)}
-                className="border-b border-gray-50 hover:bg-blue-50 cursor-pointer group">
-                <td className="px-5 py-3.5 font-medium text-gray-900 group-hover:text-blue-700">
-                  {p.name}
-                </td>
-                <td className="px-5 py-3.5 text-gray-500 text-xs capitalize">
-                  {p.industry ? p.industry.replace('_', ' & ').replace('oil & gas', 'Oil & Gas') : '—'}
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.status]||'bg-gray-100 text-gray-600'}`}>
-                    {STATUS_LABELS[p.status] || p.status}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[p.aiStatus]||'bg-gray-100 text-gray-500'}`}>
-                    {AI_LABELS[p.aiStatus] || p.aiStatus}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5 text-gray-400 text-xs">
-                  {new Date(p.updatedAt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
         {recent.length > 0 && (
           <div className="px-5 py-3 border-t border-gray-50 text-center">
             <button onClick={() => router.push('/projects')}
-              className="text-sm text-blue-600 hover:underline flex items-center gap-1 mx-auto">
+              className="text-xs sm:text-sm text-blue-600 hover:underline flex items-center gap-1 mx-auto font-medium">
               View all projects <ArrowRight size={12}/>
             </button>
           </div>

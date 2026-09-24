@@ -77,21 +77,21 @@ function EditProjectModal({ project, onClose, onSaved }: { project: any; onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-100 sticky top-0 bg-white z-10">
           <div className="flex items-center gap-2">
             <Edit3 size={18} className="text-blue-600"/>
-            <h2 className="text-lg font-semibold text-gray-900">Edit Project</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Edit Project</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
             <X size={18}/>
           </button>
         </div>
 
         {/* Form */}
-        <div className="p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           {/* Project Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Project Name *</label>
@@ -104,7 +104,7 @@ function EditProjectModal({ project, onClose, onSaved }: { project: any; onClose
           </div>
 
           {/* Industry + Status */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Industry</label>
               <select value={form.industry} onChange={e => set('industry', e.target.value)}
@@ -123,7 +123,7 @@ function EditProjectModal({ project, onClose, onSaved }: { project: any; onClose
           </div>
 
           {/* Currency + Reference */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Currency</label>
               <select value={form.currency} onChange={e => set('currency', e.target.value)}
@@ -140,7 +140,7 @@ function EditProjectModal({ project, onClose, onSaved }: { project: any; onClose
           </div>
 
           {/* Location + Deadline */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
               <input value={form.location} onChange={e => set('location', e.target.value)}
@@ -155,7 +155,7 @@ function EditProjectModal({ project, onClose, onSaved }: { project: any; onClose
           </div>
 
           {/* Tax + Profit */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Tax Rate (%)</label>
               <input type="number" min="0" max="100" step="0.1"
@@ -403,31 +403,33 @@ export default function ProjectDetailPage() {
   const industryLabel = INDUSTRIES.find(i => i.value === proj.industry)?.label || proj.industry;
 
   return (
-    <div className="p-6 max-w-screen-xl space-y-6">
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto space-y-5 sm:space-y-6">
 
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => router.back()} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500">
-          <ArrowLeft size={18}/>
-        </button>
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 sm:gap-4">
+        <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
+          <button onClick={() => router.back()} className="p-2 -ml-1 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors flex-shrink-0 mt-0.5">
+            <ArrowLeft size={18}/>
+          </button>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold text-gray-900 truncate">{proj.name}</h1>
-            {proj.referenceNumber && (
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">{proj.referenceNumber}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            {industryLabel && <span className="text-xs text-gray-500">{industryLabel}</span>}
-            {proj.currency  && <span className="text-xs text-gray-400">· {proj.currency}</span>}
-            {proj.location  && <span className="text-xs text-gray-400 flex items-center gap-1"><MapPin size={10}/>{proj.location}</span>}
-            {proj.deadline  && <span className="text-xs text-gray-400 flex items-center gap-1"><Calendar size={10}/>Due {new Date(proj.deadline).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</span>}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate">{proj.name}</h1>
+              {proj.referenceNumber && (
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">{proj.referenceNumber}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3 mt-1 flex-wrap text-xs text-gray-500">
+              {industryLabel && <span>{industryLabel}</span>}
+              {proj.currency  && <span className="text-gray-400">· {proj.currency}</span>}
+              {proj.location  && <span className="text-gray-400 flex items-center gap-1"><MapPin size={11}/>{proj.location}</span>}
+              {proj.deadline  && <span className="text-gray-400 flex items-center gap-1"><Calendar size={11}/>Due {new Date(proj.deadline).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</span>}
+            </div>
           </div>
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0 self-start md:self-auto">
           {/* AI status badge */}
           <span className={`text-xs px-3 py-1.5 rounded-full font-medium ${AI_COLOR[aiStatus]}`}>
             {isProcessing && <Loader2 size={10} className="inline animate-spin mr-1"/>}
@@ -437,28 +439,28 @@ export default function ProjectDetailPage() {
           {/* Run AI */}
           {!isProcessing && fileArr.length > 0 && (
             <button onClick={() => analyzeMut.mutate()} disabled={analyzeMut.isPending}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 disabled:bg-blue-400">
-              {analyzeMut.isPending ? <Loader2 size={13} className="animate-spin"/> : <Bot size={13}/>}
+              className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-blue-700 disabled:bg-blue-400 transition-colors shadow-sm">
+              {analyzeMut.isPending ? <Loader2 size={13} className="animate-spin"/> : <Bot size={14}/>}
               Run AI Analysis
             </button>
           )}
           {aiStatus === 'failed' && (
             <button onClick={() => analyzeMut.mutate()} disabled={analyzeMut.isPending}
-              className="flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 text-sm rounded-xl hover:bg-red-50">
+              className="flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 text-xs sm:text-sm font-medium rounded-xl hover:bg-red-50 transition-colors">
               <RefreshCw size={13}/> Retry
             </button>
           )}
 
           {/* Edit button */}
           <button onClick={() => setShowEdit(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-xl hover:bg-gray-50">
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-gray-700 text-xs sm:text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">
             <Edit3 size={14}/> Edit
           </button>
 
           {/* More menu */}
           <div className="relative" ref={menuRef}>
             <button onClick={() => setShowMenu(v => !v)}
-              className="p-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-50">
+              className="p-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors">
               <MoreVertical size={16}/>
             </button>
             {showMenu && (
@@ -518,15 +520,15 @@ export default function ProjectDetailPage() {
 
       {/* ── Project Details Card ── */}
       {(proj.description || proj.client || proj.taxPct || proj.profitMarginPct || proj.notes) && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Project Details</h3>
+            <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Project Details</h3>
             <button onClick={() => setShowEdit(true)}
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium">
               <Edit3 size={11}/> Edit details
             </button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
             {proj.client?.name && (
               <div>
                 <p className="text-xs text-gray-400 mb-1">Client</p>

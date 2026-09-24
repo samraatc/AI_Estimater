@@ -56,10 +56,10 @@ export default function QuotationsPage() {
   );
 
   return (
-    <div className="p-6 max-w-screen-xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Quotations</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{quotes.length} total</p>
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto">
+      <div className="mb-5 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Quotations</h1>
+        <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{quotes.length} total</p>
       </div>
 
       {isLoading ? (

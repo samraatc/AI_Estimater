@@ -22,10 +22,10 @@ export default function EstimationsPage() {
   const fmt = (n: any) => Number(n||0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="p-6 max-w-screen-xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Estimations</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{total || ests.length} total</p>
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto">
+      <div className="mb-5 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Estimations</h1>
+        <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{total || ests.length} total</p>
       </div>
 
       {isLoading ? (
@@ -37,15 +37,16 @@ export default function EstimationsPage() {
           <p className="text-xs text-gray-400 mt-1">Run AI analysis on a project to generate estimations</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                {['Project', 'Estimation Title', 'Version', 'Status', 'Total Amount', 'AI Confidence', 'Created'].map(h => (
-                  <th key={h} className="text-left text-xs font-medium text-gray-500 px-5 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full text-sm min-w-[680px]">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Project', 'Estimation Title', 'Version', 'Status', 'Total Amount', 'AI Confidence', 'Created'].map(h => (
+                    <th key={h} className="text-left text-xs font-medium text-gray-500 px-4 sm:px-5 py-3 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
             <tbody>
               {ests.map((e: any) => (
                 <tr key={e.id}
@@ -90,6 +91,7 @@ export default function EstimationsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

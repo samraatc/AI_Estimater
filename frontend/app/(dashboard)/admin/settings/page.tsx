@@ -25,19 +25,26 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-screen-lg">
-      <div className="mb-6"><h1 className="text-xl font-bold text-gray-900">Settings</h1><p className="text-sm text-gray-500 mt-0.5">Organisation and account settings</p></div>
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-6">
-        {(['org','security'] as const).map(t => <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 text-sm font-medium rounded-lg capitalize transition-all ${tab===t?'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'}`}>{t==='org'?'Organisation':'Security'}</button>)}
+    <div className="p-4 sm:p-6 max-w-screen-lg mx-auto">
+      <div className="mb-5 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Settings</h1>
+        <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Organisation and account settings</p>
+      </div>
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-5 sm:mb-6">
+        {(['org','security'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 text-xs sm:text-sm font-medium rounded-lg capitalize transition-all ${tab===t?'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'}`}>
+            {t==='org'?'Organisation':'Security'}
+          </button>
+        ))}
       </div>
 
       {tab === 'org' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg">
-          <h3 className="font-semibold text-gray-900 mb-5">Organisation Details</h3>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 max-w-lg shadow-sm">
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base mb-4 sm:mb-5">Organisation Details</h3>
           {t && <div className="space-y-4">
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Organisation Name</label><input defaultValue={t.name} key={t.name} onBlur={e => updateMut.mutate({ name: e.target.value })} className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-1">Plan</label><p className="text-sm text-gray-600 capitalize px-3.5 py-2.5 bg-gray-50 rounded-xl">{t.plan}</p></div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Max Users</label><p className="text-sm text-gray-600 px-3.5 py-2.5 bg-gray-50 rounded-xl">{t.maxUsers}</p></div>
               <div><label className="block text-sm font-medium text-gray-700 mb-1">AI Tokens Used</label><p className="text-sm text-gray-600 px-3.5 py-2.5 bg-gray-50 rounded-xl">{Number(t.aiTokensUsed).toLocaleString()}</p></div>
             </div>
@@ -46,14 +53,14 @@ export default function SettingsPage() {
       )}
 
       {tab === 'security' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-lg">
-          <h3 className="font-semibold text-gray-900 mb-5">Change Password</h3>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 max-w-lg shadow-sm">
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base mb-4 sm:mb-5">Change Password</h3>
           <div className="space-y-4">
             {[['Current Password','current'],['New Password','next'],['Confirm New Password','confirm']].map(([l,k]) => (
               <div key={k}><label className="block text-sm font-medium text-gray-700 mb-1">{l}</label>
                 <input type="password" value={(pw as any)[k]} onChange={e => setPw(p => ({...p,[k]:e.target.value}))} className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/></div>
             ))}
-            <button onClick={changePw} disabled={savingPw||!pw.current||!pw.next} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 disabled:bg-blue-400">
+            <button onClick={changePw} disabled={savingPw||!pw.current||!pw.next} className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:bg-blue-400 shadow-sm transition-colors">
               {savingPw ? <Loader2 size={14} className="animate-spin"/> : null} Update Password
             </button>
           </div>

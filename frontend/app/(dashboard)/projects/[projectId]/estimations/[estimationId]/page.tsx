@@ -70,7 +70,7 @@ function AiChat({ estimationId, estimation }: { estimationId: string; estimation
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col" style={{ height: '600px' }}>
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col h-[500px] sm:h-[600px] max-h-[80vh]">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white">
         <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
@@ -206,79 +206,92 @@ export default function EstimationPage() {
   const fmt = (n: any) => Number(n||0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="p-6 max-w-screen-xl space-y-5">
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto space-y-4 sm:space-y-5">
 
       {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => router.push(`/projects/${projectId}`)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500">
-          <ArrowLeft size={18}/>
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold text-gray-900 truncate">{e.title}</h1>
-            {/* Project name link */}
-            {e.project?.name && (
-              <button onClick={() => router.push(`/projects/${projectId}`)}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:underline bg-blue-50 px-2 py-1 rounded-lg">
-                {e.project.name} <ExternalLink size={10}/>
-              </button>
-            )}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 sm:gap-4">
+        <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
+          <button onClick={() => router.push(`/projects/${projectId}`)} className="p-2 -ml-1 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors flex-shrink-0 mt-0.5">
+            <ArrowLeft size={18}/>
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate">{e.title}</h1>
+              {/* Project name link */}
+              {e.project?.name && (
+                <button onClick={() => router.push(`/projects/${projectId}`)}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded-lg font-medium">
+                  {e.project.name} <ExternalLink size={10}/>
+                </button>
+              )}
+            </div>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span>v{e.versionNumber}</span>
+              <span>·</span>
+              <span className="font-semibold text-gray-700">{e.currency} {fmt(e.finalTotal)}</span>
+              <span>·</span>
+              <span className="capitalize">{e.status}</span>
+              {e.aiConfidence && (
+                <>
+                  <span>·</span>
+                  <span className="text-blue-600 font-medium">{e.aiConfidence}% AI confidence</span>
+                </>
+              )}
+            </p>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">
-            v{e.versionNumber} · {e.currency} {fmt(e.finalTotal)} · {e.status}
-            {e.aiConfidence && ` · ${e.aiConfidence}% AI confidence`}
-          </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0 self-start md:self-auto">
           <button onClick={() => versionMut.mutate()} disabled={versionMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-sm rounded-xl hover:bg-gray-50">
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-xl hover:bg-gray-50 transition-colors">
             <GitBranch size={13}/> New Version
           </button>
           {e.isLocked
-            ? <button onClick={() => unlockMut.mutate()} className="flex items-center gap-1.5 px-3 py-2 border border-amber-300 text-amber-700 text-sm rounded-xl hover:bg-amber-50"><Unlock size={13}/> Unlock</button>
-            : <button onClick={() => lockMut.mutate()} className="flex items-center gap-1.5 px-3 py-2 border border-green-300 text-green-700 text-sm rounded-xl hover:bg-green-50"><Lock size={13}/> Lock</button>
+            ? <button onClick={() => unlockMut.mutate()} className="flex items-center gap-1.5 px-3 py-2 border border-amber-300 text-amber-700 text-xs sm:text-sm font-medium rounded-xl hover:bg-amber-50 transition-colors"><Unlock size={13}/> Unlock</button>
+            : <button onClick={() => lockMut.mutate()} className="flex items-center gap-1.5 px-3 py-2 border border-green-300 text-green-700 text-xs sm:text-sm font-medium rounded-xl hover:bg-green-50 transition-colors"><Lock size={13}/> Lock</button>
           }
           <button onClick={() => quoteMut.mutate()} disabled={quoteMut.isPending}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 disabled:bg-blue-400">
+            className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 text-white text-xs sm:text-sm font-medium rounded-xl hover:bg-blue-700 disabled:bg-blue-400 transition-colors shadow-sm">
             {quoteMut.isPending ? <Loader2 size={13} className="animate-spin"/> : null} Generate Quote
           </button>
         </div>
       </div>
 
       {e.isLocked && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700 flex items-center gap-2">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs sm:text-sm text-amber-700 flex items-center gap-2">
           <Lock size={14}/> This estimation is locked. Create a new version to make changes.
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
-        {([
-          { key: 'items',   label: 'Line Items' },
-          { key: 'summary', label: 'Summary' },
-          { key: 'risks',   label: 'Risk Analysis' },
-          { key: 'chat',    label: '🤖 AI Chat' },
-        ] as const).map(({ key, label }) => (
-          <button key={key} onClick={() => setTab(key as any)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${tab===key?'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'}`}>
-            {label}
-          </button>
-        ))}
+      {/* Tabs — horizontally scrollable on mobile */}
+      <div className="overflow-x-auto w-full pb-1 -mx-1 px-1">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit min-w-max">
+          {([
+            { key: 'items',   label: 'Line Items' },
+            { key: 'summary', label: 'Summary' },
+            { key: 'risks',   label: 'Risk Analysis' },
+            { key: 'chat',    label: '🤖 AI Chat' },
+          ] as const).map(({ key, label }) => (
+            <button key={key} onClick={() => setTab(key as any)}
+              className={`px-3.5 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-all ${tab===key?'bg-white shadow-sm text-gray-900':'text-gray-500 hover:text-gray-700'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Line Items Tab */}
       {tab === 'items' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Line Items ({(e.items||[]).length})</h3>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900 text-sm sm:text-base">Line Items ({(e.items||[]).length})</h3>
             {!e.isLocked && (
-              <button onClick={() => setNewItem(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">
+              <button onClick={() => setNewItem(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors font-medium">
                 <Plus size={12}/>Add Item
               </button>
             )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full text-sm min-w-[740px]">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   {['Category','Code','Description','Qty','Unit','Unit Rate','Discount','Total',''].map(h => (

@@ -16,12 +16,21 @@ export default function AnalyticsPage() {
   const ai      = (aiAcc as any)              || {};
 
   return (
-    <div className="p-6 max-w-screen-xl space-y-6">
-      <div><h1 className="text-xl font-bold text-gray-900">Analytics</h1><p className="text-sm text-gray-500 mt-0.5">Business intelligence & AI performance</p></div>
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto space-y-5 sm:space-y-6">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Analytics</h1>
+        <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Business intelligence & AI performance</p>
+      </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[{ label:'AI Estimates', value: ai.total_ai_estimates||0, icon:Bot, color:'bg-violet-600' },{ label:'Avg Confidence', value:`${Math.round(Number(ai.avg_confidence||0))}%`, icon:CheckCircle, color:'bg-green-600' },{ label:'Win Rate', value:`${kpis.winRate||0}%`, icon:TrendingUp, color:'bg-blue-600' },{ label:'Revenue', value:`$${Number(kpis.totalRevenue||0).toLocaleString()}`, icon:Zap, color:'bg-orange-600' }].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-200 p-5"><div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center mb-3`}><Icon size={16} className="text-white"/></div><p className="text-2xl font-bold text-gray-900">{value}</p><p className="text-sm text-gray-500 mt-0.5">{label}</p></div>
+          <div key={label} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm">
+            <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center mb-3 shadow-xs`}>
+              <Icon size={16} className="text-white"/>
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{label}</p>
+          </div>
         ))}
       </div>
 

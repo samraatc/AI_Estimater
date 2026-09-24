@@ -36,8 +36,8 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-white tracking-tight">EstimateOS</h1>
           <p className="text-slate-400 mt-1 text-sm">AI-Powered Enterprise Estimation</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Sign in to your account</h2>
+        <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-8">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-5 sm:mb-6">Sign in to your account</h2>
           {error && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
           <form onSubmit={onSubmit} className="space-y-4">
             <div>

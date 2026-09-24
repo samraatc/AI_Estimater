@@ -32,8 +32,8 @@ function AcceptInviteForm() {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl p-8">
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Activate Your Account</h2>
+    <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-8">
+      <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-5 sm:mb-6">Activate Your Account</h2>
 
       {!token && (
         <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm">
@@ -48,7 +48,7 @@ function AcceptInviteForm() {
       )}
 
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {([['First Name', 'firstName'], ['Last Name', 'lastName']] as const).map(([l, k]) => (
             <div key={k}>
               <label className="block text-sm font-medium text-gray-700 mb-1">{l}</label>

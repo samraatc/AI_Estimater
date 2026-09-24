@@ -52,19 +52,19 @@ function EditModal({ quote, onClose, onSaved }: { quote: any; onClose: () => voi
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100 sticky top-0 bg-white">
-          <div className="flex items-center gap-2"><Edit3 size={17} className="text-blue-600"/><h2 className="font-semibold text-gray-900">Edit Quotation</h2></div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={17}/></button>
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <div className="flex items-center gap-2"><Edit3 size={17} className="text-blue-600"/><h2 className="font-semibold text-gray-900 text-base sm:text-lg">Edit Quotation</h2></div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"><X size={17}/></button>
         </div>
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Title *</label>
             <input value={form.title} onChange={e => set('title', e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Status</label>
               <select value={form.status} onChange={e => set('status', e.target.value)}
@@ -98,7 +98,7 @@ function EditModal({ quote, onClose, onSaved }: { quote: any; onClose: () => voi
               className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"/>
           </div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-gray-100 sticky bottom-0 bg-white">
+        <div className="flex gap-3 p-4 sm:p-5 border-t border-gray-100 sticky bottom-0 bg-white">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium hover:bg-gray-50">Cancel</button>
           <button onClick={save} disabled={saving}
             className="flex-1 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:bg-blue-400">
@@ -124,11 +124,11 @@ function SendModal({ quoteId, quoteNumber, defaultEmail, onClose, onSent }: {
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <div className="flex items-center gap-2"><Send size={16} className="text-blue-600"/><h3 className="font-semibold">Send Quotation</h3></div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={17}/></button>
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100">
+          <div className="flex items-center gap-2"><Send size={16} className="text-blue-600"/><h3 className="font-semibold text-gray-900">Send Quotation</h3></div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"><X size={17}/></button>
         </div>
         <div className="p-5 space-y-3">
           <div>
@@ -257,56 +257,58 @@ export default function QuotationDetailPage() {
   const profit = Math.max(0, Number(quote.finalTotal) - Number(quote.subtotal) - Number(quote.taxAmount));
 
   return (
-    <div className="p-6 max-w-screen-xl space-y-5">
+    <div className="p-4 sm:p-6 max-w-screen-xl mx-auto space-y-4 sm:space-y-5">
 
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => router.back()} className="p-2 rounded-xl hover:bg-gray-100 text-gray-500">
-          <ArrowLeft size={18}/>
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold text-gray-900">{quote.quoteNumber}</h1>
-            <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[quote.status]||'bg-gray-100 text-gray-600'}`}>
-              {quote.status}
-            </span>
-            {projectName && (
-              <button onClick={() => projectId && router.push(`/projects/${projectId}`)}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded-lg">
-                {projectName} <ExternalLink size={9}/>
-              </button>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 mt-0.5 truncate">{quote.title}</p>
-          <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <span className="flex items-center gap-1 text-xs text-gray-400">
-              <Calendar size={10}/> Created {fmtDT(quote.createdAt)}
-            </span>
-            {quote.sentAt && (
-              <span className="flex items-center gap-1 text-xs text-blue-500">
-                <Send size={10}/> Sent {fmtDT(quote.sentAt)} → {quote.sentToEmail}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 sm:gap-4">
+        <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
+          <button onClick={() => router.back()} className="p-2 -ml-1 rounded-xl hover:bg-gray-100 text-gray-500 transition-colors flex-shrink-0 mt-0.5">
+            <ArrowLeft size={18}/>
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{quote.quoteNumber}</h1>
+              <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[quote.status]||'bg-gray-100 text-gray-600'}`}>
+                {quote.status}
               </span>
-            )}
+              {projectName && (
+                <button onClick={() => projectId && router.push(`/projects/${projectId}`)}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded-lg font-medium">
+                  {projectName} <ExternalLink size={9}/>
+                </button>
+              )}
+            </div>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{quote.title}</p>
+            <div className="flex items-center gap-2 sm:gap-3 mt-1 flex-wrap text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <Calendar size={11}/> Created {fmtDT(quote.createdAt)}
+              </span>
+              {quote.sentAt && (
+                <span className="flex items-center gap-1 text-blue-500">
+                  <Send size={11}/> Sent {fmtDT(quote.sentAt)} → {quote.sentToEmail}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0 self-start md:self-auto">
           <button onClick={downloadPdf} disabled={pdfLoading}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-sm rounded-xl hover:bg-gray-50 text-gray-700 font-medium">
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-xs sm:text-sm rounded-xl hover:bg-gray-50 text-gray-700 font-medium transition-colors">
             {pdfLoading ? <Loader2 size={13} className="animate-spin"/> : <Download size={13}/>} Download PDF
           </button>
           <button onClick={() => setShowSend(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700 font-medium">
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 text-white text-xs sm:text-sm rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-sm">
             <Send size={13}/> Send to Client
           </button>
           <button onClick={() => setShowEdit(true)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-sm rounded-xl hover:bg-gray-50 text-gray-700 font-medium">
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-xs sm:text-sm rounded-xl hover:bg-gray-50 text-gray-700 font-medium transition-colors">
             <Edit3 size={13}/> Edit
           </button>
           <div className="relative">
             <button onClick={() => setShowMenu(v => !v)}
-              className="p-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-50">
+              className="p-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors">
               <MoreVertical size={16}/>
             </button>
             {showMenu && (
