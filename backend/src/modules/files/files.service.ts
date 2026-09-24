@@ -40,7 +40,17 @@ export class FilesService {
   }
 
   async findByProject(projectId: string, tenantId: string) {
-    return this.fileModel.find({ projectId, tenantId }).sort({ createdAt: -1 }).lean();
+    const files = await this.fileModel.find({ projectId, tenantId }).sort({ createdAt: -1 }).lean();
+    for (const f of files) {
+      if (f.ocrStatus === 'processing' && (f as any).createdAt) {
+        const elapsed = Date.now() - new Date((f as any).createdAt).getTime();
+        if (elapsed > 4 * 60 * 1000) {
+          await this.fileModel.updateOne({ id: f.id }, { $set: { ocrStatus: 'pending' } });
+          f.ocrStatus = 'pending';
+        }
+      }
+    }
+    return files;
   }
 
   async findOne(id: string, tenantId: string) {

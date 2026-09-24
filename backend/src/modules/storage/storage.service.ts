@@ -96,18 +96,35 @@ export class StorageService implements OnModuleInit {
     }
 
     if (this.useCloudinary) {
-      // 1. Try signed private download URL (needed for PDFs and restricted delivery assets)
-      try {
-        const cleanPublicId = key.startsWith('estimateos/')
-          ? key
-          : 'estimateos/' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const ext = key.includes('.') ? key.split('.').pop() || 'pdf' : 'pdf';
+      const cleanPublicId = key.startsWith('estimateos/')
+        ? key
+        : 'estimateos/' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
 
+      // 1. Try public Cloudinary URL with appropriate resource type
+      const isImg = /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(key);
+      const isPdf = key.toLowerCase().endsWith('.pdf');
+      const candidateTypes = isImg ? ['image', 'raw', 'auto'] : isPdf ? ['image', 'raw', 'auto'] : ['raw', 'auto', 'image'];
+
+      for (const resType of candidateTypes) {
+        try {
+          const url = cloudinary.url(cleanPublicId, { secure: true, resource_type: resType });
+          const res = await fetch(url);
+          if (res.ok) {
+            const arrayBuffer = await res.arrayBuffer();
+            if (arrayBuffer.byteLength > 0) {
+              return Buffer.from(arrayBuffer);
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Fallback to private download URL if needed
+      try {
+        const ext = key.includes('.') ? key.split('.').pop() || 'pdf' : 'pdf';
         const downloadUrl = (cloudinary.utils as any).private_download_url(cleanPublicId, ext, {
           resource_type: ext === 'pdf' ? 'image' : 'auto',
           type: 'upload',
         });
-
         const res = await fetch(downloadUrl);
         if (res.ok) {
           const arrayBuffer = await res.arrayBuffer();
@@ -116,19 +133,7 @@ export class StorageService implements OnModuleInit {
           }
         }
       } catch (err: any) {
-        this.logger.warn(`Cloudinary private download attempt failed: ${err.message}`);
-      }
-
-      // 2. Fallback to standard delivery URL
-      try {
-        const url = cloudinary.url(key, { secure: true, resource_type: 'auto' });
-        const res = await fetch(url);
-        if (res.ok) {
-          const arrayBuffer = await res.arrayBuffer();
-          return Buffer.from(arrayBuffer);
-        }
-      } catch (err: any) {
-        this.logger.warn(`Cloudinary standard download failed: ${err.message}`);
+        this.logger.warn(`Cloudinary download attempt failed: ${err.message}`);
       }
 
       return Buffer.from('');
@@ -152,18 +157,15 @@ export class StorageService implements OnModuleInit {
       return key;
     }
     if (this.useCloudinary) {
-      try {
-        const cleanPublicId = key.startsWith('estimateos/')
-          ? key
-          : 'estimateos/' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const ext = key.includes('.') ? key.split('.').pop() || 'pdf' : 'pdf';
-        return (cloudinary.utils as any).private_download_url(cleanPublicId, ext, {
-          resource_type: ext === 'pdf' ? 'image' : 'auto',
-          type: 'upload',
-        });
-      } catch {
-        return cloudinary.url(key, { secure: true, resource_type: 'auto' });
-      }
+      const cleanPublicId = key.startsWith('estimateos/')
+        ? key
+        : 'estimateos/' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const isImg = /\.(jpe?g|png|webp|gif|bmp|tiff?)$/i.test(key);
+      const isPdf = key.toLowerCase().endsWith('.pdf');
+      return cloudinary.url(cleanPublicId, {
+        secure: true,
+        resource_type: isImg ? 'image' : isPdf ? 'image' : 'auto',
+      });
     }
     if (this.minioClient) {
       return this.minioClient.presignedGetObject(bucket, key, expiry);

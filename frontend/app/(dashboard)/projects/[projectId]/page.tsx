@@ -500,12 +500,21 @@ export default function ProjectDetailPage() {
         </div>
       )}
       {isProcessing && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-          <Loader2 size={18} className="text-amber-600 animate-spin flex-shrink-0"/>
-          <div>
-            <p className="text-sm font-semibold text-amber-800">AI Analysis in Progress</p>
-            <p className="text-xs text-amber-600 mt-0.5">GPT-4o is reading your documents. This takes 1–3 minutes and updates automatically.</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Loader2 size={18} className="text-amber-600 animate-spin flex-shrink-0"/>
+            <div>
+              <p className="text-sm font-semibold text-amber-800">AI Analysis in Progress</p>
+              <p className="text-xs text-amber-600 mt-0.5">GPT-4o is reading your documents. This takes 1–3 minutes and updates automatically.</p>
+            </div>
           </div>
+          <button
+            onClick={() => analyzeMut.mutate()}
+            disabled={analyzeMut.isPending}
+            className="flex-shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium transition-colors"
+          >
+            Restart Analysis
+          </button>
         </div>
       )}
       {aiStatus === 'failed' && (

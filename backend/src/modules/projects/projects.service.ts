@@ -43,6 +43,20 @@ export class ProjectsService {
   async findOne(id: string, tenantId: string) {
     const p = await this.projectModel.findOne({ id, tenantId, deletedAt: null }).lean();
     if (!p) throw new NotFoundException('Project not found');
+
+    // Auto-recover stale "processing" status if it has been hanging for > 4 minutes
+    if (p.aiStatus === 'processing' && p.updatedAt) {
+      const elapsedMs = Date.now() - new Date(p.updatedAt).getTime();
+      if (elapsedMs > 4 * 60 * 1000) {
+        await this.projectModel.updateOne(
+          { id, tenantId },
+          { $set: { aiStatus: 'failed', aiSummary: 'AI processing timed out. Please click Retry to analyze again.' } }
+        );
+        p.aiStatus = 'failed';
+        p.aiSummary = 'AI processing timed out. Please click Retry to analyze again.';
+      }
+    }
+
     if (p.clientId) {
       p.client = await this.clientModel.findOne({ id: p.clientId }).lean();
     }

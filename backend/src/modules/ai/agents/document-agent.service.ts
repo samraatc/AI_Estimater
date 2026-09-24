@@ -187,6 +187,11 @@ File name: ${filename}`,
 
   // ── Tesseract OCR — fallback only ────────────────────────────
   private async extractOcr(buffer: Buffer): Promise<string> {
+    if (!buffer || buffer.length === 0) return '';
+    if (process.env.VERCEL) {
+      this.logger.warn('Skipping Tesseract OCR fallback in serverless environment');
+      return '';
+    }
     try {
       const { createWorker } = require('tesseract.js');
       const worker = await createWorker('eng', 1, {
